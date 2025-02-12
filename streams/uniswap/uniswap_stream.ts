@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRef, Stream } from '../../core/abstract_stream';
+import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
 import { events as abi_events } from './abi';
 
 export type UniswapSwap = {
@@ -12,22 +12,26 @@ export type UniswapSwap = {
   contract_address: string;
   block: BlockRef;
   timestamp: Date;
+  offset: Offset;
 };
 
-export class UniswapStream
-  extends AbstractStream<{ args: { fromBlock: number; pairs?: string[] } }>
-  implements Stream {
+export class UniswapStream extends AbstractStream<
+  {
+    fromBlock: number;
+    pairs?: string[];
+  },
+  UniswapSwap
+> {
   async stream(): Promise<ReadableStream<UniswapSwap[]>> {
-    const {args, state} = this.options;
+    const {args} = this.options;
 
-    const fromState = state ? await state.get() : null;
-    const fromBlock = fromState ? fromState.number : args.fromBlock;
+    const offset = await this.getState({number: args.fromBlock, hash: ''});
 
-    console.log(`staring from block ${fromBlock}`);
+    this.logger.debug(`starting from block ${offset.number}`);
 
-    const source = this.options.portal.getFinalizedStream({
+    const source = this.portal.getFinalizedStream({
       type: 'evm',
-      fromBlock: fromBlock,
+      fromBlock: offset.number,
       fields: {
         block: {
           number: true,
@@ -67,6 +71,11 @@ export class UniswapStream
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];
 
+            const offset = this.encodeOffset({
+              number: block.header.number,
+              hash: block.header.hash,
+            });
+
             return block.logs
               .filter((l) => abi_events.Swap.is(l))
               .map((l): UniswapSwap => {
@@ -83,6 +92,7 @@ export class UniswapStream
                   contract_address: l.address,
                   block: block.header,
                   timestamp: new Date(block.header.timestamp),
+                  offset,
                 };
               });
           });

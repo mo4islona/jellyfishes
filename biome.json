@@ -50,8 +50,7 @@
     },
     "ignore": [
       "dist/*",
-      "**/*.d.ts",
-      "./src/public/"
+      "**/*.d.ts"
     ]
   },
   "javascript": {

@@ -1,84 +1,110 @@
-import { ClickHouseError } from '@clickhouse/client';
+import { ClickHouseClient, ClickHouseError } from '@clickhouse/client';
 import { NodeClickHouseClient } from '@clickhouse/client/dist/client';
-import { BlockRef } from '../abstract_stream';
-import { State } from '../state';
+import { Offset } from '../abstract_stream';
+import { AbstractState, State } from '../state';
 
-export class ClickhouseState implements State {
-  private lastState?: BlockRef;
+const table = (table: string) => `
+    CREATE TABLE IF NOT EXISTS ${table}
+    (
+        "id"      String,
+        "initial" String,
+        "offset"  String
+    ) ENGINE = ReplacingMergeTree()
+ORDER BY (id)
+`;
+
+type Options = { database?: string; table: string; id?: string };
+
+export class ClickhouseProgress extends AbstractState implements State {
+  options: Required<Options>;
+  initial?: string;
+
+  private readonly fullTableName: string;
 
   constructor(
     private client: NodeClickHouseClient,
-    private readonly options: { database?: string; table: string; id?: string },
+    options: { database?: string; table: string; id?: string },
   ) {
+    super();
+
     this.options = {
       database: 'default',
       id: 'stream',
       ...options,
     };
+
+    this.fullTableName = `"${this.options.database}"."${this.options.table}"`;
   }
 
-  async set(state: BlockRef) {
+  async saveOffset(offset: Offset) {
     await this.client.insert({
       table: this.options.table,
       values: [
-        // cancel state
-        this.lastState
-          ? {
-            id: this.options.id,
-            block_number: state.number,
-            block_hash: state.hash,
-            sign: -1,
-          }
-          : null,
-        // new state
         {
           id: this.options.id,
-          block_number: state.number,
-          block_hash: state.hash,
-          sign: 1,
+          initial: this.initial,
+          offset: offset,
         },
       ].filter(Boolean),
       format: 'JSONEachRow',
     });
-
-    this.lastState = state;
   }
 
-  async get() {
+  async getOffset(defaultValue: Offset) {
     try {
       const res = await this.client.query({
-        query: `SELECT * FROM "${this.options.database}"."${this.options.table}" FINAL WHERE id = {id:String} LIMIT 1`,
+        query: `SELECT *
+                FROM "${this.options.database}"."${this.options.table}" FINAL
+                WHERE id = {id:String}
+                LIMIT 1`,
         format: 'JSONEachRow',
         query_params: {id: this.options.id},
       });
 
-      const [block] = await res.json<{ block_number: string; block_hash: string }>();
+      const [row] = await res.json<{ initial: string; offset: string }>();
 
-      if (block) {
-        this.lastState = {
-          number: parseInt(block.block_number, 10),
-          hash: block.block_hash,
-        };
+      this.initial = row.initial;
 
-        return this.lastState;
-      }
+      if (row) return {current: row.offset, initial: row.initial};
+
+      return;
     } catch (e: unknown) {
       if (e instanceof ClickHouseError && e.type === 'UNKNOWN_TABLE') {
         await this.client.command({
-          query: `
-          CREATE TABLE IF NOT EXISTS "${this.options.database}"."${this.options.table}"
-          (id String, block_number Int64, block_hash String, sign Int8)
-          ENGINE = CollapsingMergeTree(sign)
-          ORDER BY (id)
-        `,
+          query: table(this.fullTableName),
         });
+
+        this.initial = defaultValue;
+        await this.saveOffset(defaultValue);
 
         return;
       }
 
       throw e;
     }
+  }
 
-    return;
+  async cleanAllBeforeOffset(
+    clickhouse: ClickHouseClient,
+    {tables, offset, column}: { tables: string[]; offset: number; column: string },
+  ) {
+    await Promise.all(
+      tables.map(async (table) => {
+        const res = await clickhouse.query({
+          query: `SELECT *
+                  FROM ${table}
+                  WHERE ${column} >= {o:String}`,
+          format: 'JSONEachRow',
+          query_params: {o: offset},
+        });
+
+        const rows = await res.json();
+        if (rows.length === 0) return;
+
+        console.log(`rolling back ${rows.length} rows from ${table}`);
+
+        throw new Error('not implemented');
+      }),
+    );
   }
 }

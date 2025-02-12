@@ -1,0 +1,130 @@
+import assert from 'assert';
+import { getInstructionDescriptor } from '@subsquid/solana-stream';
+import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
+import * as tokenProgram from './abi/tokenProgram/index';
+
+export type SolanaMint = {
+  account: string;
+  decimals: number;
+  mintAuthority: string;
+  freezeAuthority?: string;
+  transaction: TransactionRef;
+  block: BlockRef;
+  offset: string;
+  timestamp: Date;
+};
+
+export class SolanaMintStream extends AbstractStream<
+  {
+    fromBlock: number;
+    toBlock?: number;
+  },
+  SolanaMint
+> {
+  async stream(): Promise<ReadableStream<SolanaMint[]>> {
+    const {args} = this.options;
+
+    const offset = await this.getState({number: args.fromBlock, hash: ''});
+
+    this.logger.debug(`starting from block ${offset.number}`);
+
+    const source = this.portal.getFinalizedStream({
+      type: 'solana',
+      fromBlock: offset.number,
+      toBlock: args.toBlock,
+      fields: {
+        block: {
+          number: true,
+          hash: true,
+          timestamp: true,
+        },
+        transaction: {
+          transactionIndex: true,
+          signatures: true,
+        },
+        instruction: {
+          transactionIndex: true,
+          data: true,
+          instructionAddress: true,
+          programId: true,
+          accounts: true,
+        },
+        tokenBalance: {
+          transactionIndex: true,
+          account: true,
+          preMint: true,
+          postMint: true,
+        },
+      },
+      instructions: [
+        {
+          programId: [tokenProgram.programId], // where executed by Whirlpool program
+          d1: [tokenProgram.instructions.initializeMint2.d1], // have first 8 bytes of .data equal to swap descriptor
+          isCommitted: true, // where successfully committed
+          innerInstructions: true, // inner instructions
+          transaction: true, // transaction, that executed the given instruction
+          transactionTokenBalances: true, // all token balance records of executed transaction
+        },
+      ],
+    });
+
+    return source.pipeThrough(
+      new TransformStream({
+        transform: ({blocks}, controller) => {
+          // FIXME
+          const res = blocks.flatMap((block: any) => {
+            if (!block.instructions) return [];
+
+            const offset = this.encodeOffset({
+              number: block.header.number,
+              hash: block.header.hash,
+            });
+
+            const mints: SolanaMint[] = [];
+
+            for (const ins of block.instructions) {
+              if (ins.programId !== tokenProgram.programId) {
+                continue;
+              }
+
+              if (
+                getInstructionDescriptor(ins) !==
+                `${tokenProgram.instructions.initializeMint2.d1}0606c5c1ce638d`
+              ) {
+                continue;
+              }
+
+              const mint = tokenProgram.instructions.initializeMint2.decode(ins);
+
+              const tx = block.transactions.find(
+                (t) => t.transactionIndex === ins.transactionIndex,
+              );
+              const txId = tx.signatures[0];
+              assert(tx, 'transaction not found');
+
+              mints.push({
+                account: mint.accounts.mint,
+                decimals: mint.data.decimals,
+                mintAuthority: mint.data.mintAuthority,
+                freezeAuthority: mint.data.freezeAuthority,
+                transaction: {
+                  id: txId,
+                  index: ins.transactionIndex,
+                },
+                block: {number: block.header.number, hash: block.header.hash},
+                timestamp: new Date(block.header.timestamp * 1000),
+                offset,
+              });
+            }
+
+            return mints;
+          });
+
+          if (!res.length) return;
+
+          controller.enqueue(res);
+        },
+      }),
+    );
+  }
+}

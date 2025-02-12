@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRef, Stream } from '../../core/abstract_stream';
+import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
 import { events as abi_events } from './abi';
 
 export type Erc20Event = {
@@ -9,28 +9,30 @@ export type Erc20Event = {
   block: BlockRef;
   tx: string;
   timestamp: Date;
+  offset: Offset;
 };
 
-export class Erc20Stream
-  extends AbstractStream<{
-    args: {
-      fromBlock: number;
-      toBlock?: number;
-      contracts: string[];
-    };
-  }>
-  implements Stream {
+export class Erc20Stream extends AbstractStream<
+  {
+    fromBlock: number;
+    toBlock?: number;
+    contracts: string[];
+  },
+  Erc20Event
+> {
   async stream(): Promise<ReadableStream<Erc20Event[]>> {
-    const {args, state} = this.options;
+    const {args} = this.options;
 
-    const fromState = state ? await state.get() : null;
-    const fromBlock = fromState ? fromState.number : args.fromBlock;
+    const offset = await this.getState({
+      number: args.fromBlock,
+      hash: '',
+    });
 
-    this.logger.debug(`starting from block ${fromBlock} ${fromState ? 'from state' : 'from args'}`);
+    this.logger.debug(`starting from block ${offset.number}`);
 
-    const source = this.options.portal.getFinalizedStream({
+    const source = this.portal.getFinalizedStream({
       type: 'evm',
-      fromBlock: fromBlock,
+      fromBlock: offset.number,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -63,9 +65,14 @@ export class Erc20Stream
     return source.pipeThrough(
       new TransformStream({
         transform: ({blocks}, controller) => {
-          // FIXME
+          // FIXME any
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];
+
+            const offset = this.encodeOffset({
+              number: block.header.number,
+              hash: block.header.hash,
+            });
 
             return block.logs
               .filter((l: any) => abi_events.Transfer.is(l))
@@ -80,6 +87,7 @@ export class Erc20Stream
                   block: block.header,
                   timestamp: new Date(block.header.timestamp * 1000),
                   tx: l.transactionHash,
+                  offset,
                 };
               });
           });
