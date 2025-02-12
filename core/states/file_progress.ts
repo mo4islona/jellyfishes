@@ -1,16 +1,16 @@
 import fs from 'node:fs/promises';
-import { HashAndNumber } from '@abernatskiy/portal-client/src/query';
-import { State } from '../state';
+import { Offset } from '../abstract_stream';
+import { Progress } from '../progress';
 
-export class FileState implements State {
+export class FileProgress implements Progress {
   constructor(private readonly filepath: string) {
   }
 
-  async set(state: HashAndNumber) {
-    await fs.writeFile(this.filepath, JSON.stringify(state.toString));
+  async saveOffset(state: Offset) {
+    await fs.writeFile(this.filepath, state);
   }
 
-  async get() {
+  async getOffset() {
     try {
       const state = await fs.readFile(this.filepath, 'utf8');
       if (state) {

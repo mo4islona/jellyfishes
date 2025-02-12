@@ -20,25 +20,44 @@ export type TrackProgressOptions = {
   onProgress: (progress: Progress) => void;
 };
 
-export class TrackProgress {
+export class TrackProgress<Data = never> {
+  first?: { block: BlockRef; ts: number };
   last: { block: BlockRef; ts: number };
-  current: BlockRef;
+  current: { block: BlockRef; ts: number };
+  interval?: NodeJS.Timeout;
 
-  constructor({portal, intervalSeconds = 10, onProgress}: TrackProgressOptions) {
+  constructor(private options: TrackProgressOptions) {
+  }
+
+  track(block: BlockRef, data?: Data) {
+    if (!this.first) {
+      this.first = {block, ts: Date.now()};
+    }
+    this.current = {block, ts: Date.now()};
+
+    if (this.interval) return;
+
     const headCall = new Throttler(() => portal.getFinalizedHeight(), 60_000);
+    const {portal, intervalSeconds = 5, onProgress} = this.options;
 
-    setInterval(async () => {
+    this.interval = setInterval(async () => {
+      if (!this.current || !this.first) return;
+
       const head = await headCall.get();
-      const processed = this.last ? this.current.number - this.last.block.number : 0;
+
+      const processed = this.last ? this.current.block.number - this.last.block.number : 0;
       const elapsed = this.last ? (Date.now() - this.last.ts) / 1000 : 0;
       const speed =
         processed && elapsed ? `${Math.floor(processed / elapsed)} blocks/sec` : 'unknown';
 
+      const diffFromStart = this.current.block.number - this.first.block.number;
+      const diffToEnd = head - this.first.block.number;
+
       onProgress({
         blocks: {
           head,
-          current: this.current.number,
-          percent_done: (this.current.number / head) * 100,
+          current: this.current.block.number,
+          percent_done: (diffFromStart / diffToEnd) * 100,
         },
         interval: {
           processed,
@@ -46,11 +65,7 @@ export class TrackProgress {
         },
       });
 
-      this.last = {block: this.current, ts: Date.now()};
+      this.last = this.current;
     }, intervalSeconds * 1000);
-  }
-
-  track(block: BlockRef) {
-    this.current = block;
   }
 }

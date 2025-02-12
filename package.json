@@ -9,6 +9,7 @@
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447",
   "dependencies": {
     "@clickhouse/client": "^1.10.1",
+    "@solana/spl-token": "^0.4.12",
     "@subsquid/evm-abi": "^0.3.1",
     "@subsquid/evm-codec": "^0.3.0",
     "@subsquid/http-client": "^1.6.0",

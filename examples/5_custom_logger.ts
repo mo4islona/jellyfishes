@@ -9,7 +9,7 @@ async function main() {
 
   const logger = createLogger('erc20');
 
-  const ds = new Erc20Stream({
+  const dataSource = new Erc20Stream({
     portal,
     args: {
       fromBlock: 4634748,
@@ -18,7 +18,7 @@ async function main() {
     logger,
   });
 
-  for await (const erc20 of await ds.stream()) {
+  for await (const erc20 of await dataSource.stream()) {
     logger.info(`processed ${erc20.length} erc20 transfers`);
   }
 }

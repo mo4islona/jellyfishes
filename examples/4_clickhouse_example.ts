@@ -1,6 +1,6 @@
 import { createClient } from '@clickhouse/client';
 import { PortalClient } from '@subsquid/portal-client';
-import { ClickhouseState } from '../core/states/clickhouse_state';
+import { ClickhouseProgress } from '../core/states/clickhouse_progress';
 import { TrackProgress } from '../core/track_progress';
 import { Erc20Stream } from '../streams/erc20/erc20_stream';
 import { createLogger, formatNumber, last } from './utils';
@@ -21,36 +21,41 @@ async function main() {
   const logger = createLogger('erc20');
 
   /**
-   *  Current streaming progress will be stored in the 'status_erc20' Clickhouse table.
-   *  The table will be created if it does not exist.
-   *  If the table already exists, the last processed block will be read from it,
-   *  thus allowing the process to continue from the last block.
-   */
-  const state = new ClickhouseState(clickhouse, {
-    table: 'status_erc20',
-  });
-
-  /**
    * Initialize Erc20 datasource with the following parameters:
    */
-  const ds = new Erc20Stream({
+  const dataSource = new Erc20Stream({
     portal,
     args: {
       fromBlock: 4634748,
       contracts: ['0xdac17f958d2ee523a2206206994597c13d831ec7'],
     },
     logger,
-    state,
+    /**
+     *  Current streaming progress will be stored in the 'status_erc20' Clickhouse table.
+     *  The table will be created if it does not exist.
+     *  If the table already exists, the last processed block will be read from it,
+     *  thus allowing the process to continue from the last block.
+     */
+    progress: new ClickhouseProgress(clickhouse, {
+      table: 'status_erc20',
+    }),
   });
 
   /**
    * Create the 'erc20_transfers' table in Clickhouse if it does not exist.
    */
   await clickhouse.command({
-    query: ` 
-      CREATE TABLE IF NOT EXISTS erc20_transfers
-      (block_number UInt32, from String, to String, token LowCardinality(String), amount Int64, timestamp DateTime, tx String)
-      ENGINE = MergeTree()
+    query: `
+        CREATE TABLE IF NOT EXISTS erc20_transfers
+        (
+            block_number UInt32,
+            from         String,
+            to           String,
+            token        LowCardinality(String),
+            amount       Int64,
+            timestamp    DateTime,
+            tx           String
+        ) ENGINE = MergeTree()
       ORDER BY (timestamp, token)
     `,
   });
@@ -70,15 +75,7 @@ async function main() {
     },
   });
 
-  for await (const erc20 of await ds.stream()) {
-    /**
-     *   We recommend using transactions for inserts to ensure data consistency,
-     *   though it is an experimental Clickhouse feature.
-     *
-     *    https://clickhouse.com/docs/en/guides/developer/transactional#transactions-commit-and-rollback
-     */
-    // await clickhouse.command({query: 'BEGIN TRANSACTION'});
-
+  for await (const erc20 of await dataSource.stream()) {
     await clickhouse.insert({
       table: 'erc20_transfers',
       values: erc20.map((e) => ({
@@ -93,21 +90,15 @@ async function main() {
       format: 'JSONEachRow',
     });
 
-    const block = last(erc20).block;
-
     /**
      * Store the last processed block in the Clickhouse table 'status_erc20'.
      */
-    await state.set(block);
+    await dataSource.ack(erc20);
 
-    /**
-     * Notify the progress tracker about the last processed block.
-     */
+    const block = last(erc20).block;
     progress.track(block);
 
     logger.debug(`processed ${erc20.length} erc20 transfers`);
-
-    // await clickhouse.command({query: 'COMMIT'});
   }
 }
 

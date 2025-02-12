@@ -1,18 +1,19 @@
 import assert from 'assert';
 import { getInstructionDescriptor } from '@subsquid/solana-stream';
-import { AbstractStream, Stream } from '../../core/abstract_stream';
+import { AbstractStream, BlockRef } from '../../core/abstract_stream';
 import * as tokenProgram from './abi/tokenProgram/index';
 import * as whirlpool from './abi/whirlpool/index';
 
 export type SolanaSwap = {
-  inputAmount: bigint;
-  inputMint: string;
-  inputVault: string;
-  outputAmount: bigint;
-  outputMint: string;
-  outputVault: string;
-  transactionIndex: number;
-  instructionAddress: number[];
+  id: string;
+  account: string;
+  transaction: { id: string; index: number };
+  input: { amount: bigint; mint: string; vault: string };
+  output: { amount: bigint; mint: string; vault: string };
+  instruction: { address: number[] };
+  block: BlockRef;
+  offset: string;
+  timestamp: Date;
 };
 
 function extractInnerInstructions(instruction: any, instructions: any[]) {
@@ -24,31 +25,35 @@ function extractInnerInstructions(instruction: any, instructions: any[]) {
   );
 }
 
-export class SolanaSwapsStream
-  extends AbstractStream<{
+export class SolanaWhirlpoolStream extends AbstractStream<
+  {
     args: {
       fromBlock: number;
       toBlock?: number;
+      tokens?: string[];
     };
-  }>
-  implements Stream {
+  },
+  SolanaSwap
+> {
   async stream(): Promise<ReadableStream<SolanaSwap[]>> {
-    const {args, state} = this.options;
+    const {args} = this.options;
 
-    const fromState = state ? await state.get() : null;
-    const fromBlock = fromState ? fromState.number : args.fromBlock;
+    const offset = await this.getOffset({number: args.fromBlock, hash: ''});
 
-    this.logger.debug(`starting from block ${fromBlock} ${fromState ? 'from state' : 'from args'}`);
+    this.logger.debug(`starting from block ${offset.number}`);
 
     const source = this.options.portal.getFinalizedStream({
       type: 'solana',
-      fromBlock,
+      fromBlock: offset.number,
       toBlock: args.toBlock,
       fields: {
         block: {
+          number: true,
+          hash: true,
           timestamp: true,
         },
         transaction: {
+          transactionIndex: true,
           signatures: true,
         },
         instruction: {
@@ -69,6 +74,7 @@ export class SolanaSwapsStream
         {
           programId: [whirlpool.programId], // where executed by Whirlpool program
           d8: [whirlpool.instructions.swap.d8], // have first 8 bytes of .data equal to swap descriptor
+
           isCommitted: true, // where successfully committed
           innerInstructions: true, // inner instructions
           transaction: true, // transaction, that executed the given instruction
@@ -85,6 +91,11 @@ export class SolanaSwapsStream
             if (!block.instructions) return [];
 
             const swaps: SolanaSwap[] = [];
+
+            const offset = this.encodeOffset({
+              number: block.header.number,
+              hash: block.header.hash,
+            });
 
             for (const ins of block.instructions) {
               if (ins.programId !== whirlpool.programId) {
@@ -106,28 +117,56 @@ export class SolanaSwapsStream
               const inputMint = tokenBalances.find(
                 (balance) => balance.account === srcTransfer.accounts.destination,
               )?.preMint;
-              assert(inputMint != null, 'inputMint != null');
+              assert(inputMint != null, 'inputMint is null');
               const inputAmount = srcTransfer.data.amount;
 
               const outputMint = tokenBalances.find(
                 (balance) => balance.account === destTransfer.accounts.source,
               )?.preMint;
-              assert(outputMint != null, 'outputMint != null');
+              assert(outputMint != null, 'outputMint is null');
               const outputAmount = destTransfer.data.amount;
+
+              if (
+                args.tokens &&
+                !args.tokens.includes(inputMint) &&
+                !args.tokens.includes(outputMint)
+              ) {
+                continue;
+              }
+
+              const tx = block.transactions.find(
+                (t) => t.transactionIndex === ins.transactionIndex,
+              );
+              const txId = tx.signatures[0];
+              assert(tx, 'transaction not found');
 
               const [inputVault, outputVault] = swap.data.aToB
                 ? [swap.accounts.tokenVaultA, swap.accounts.tokenVaultB]
                 : [swap.accounts.tokenVaultB, swap.accounts.tokenVaultA];
 
               swaps.push({
-                inputAmount,
-                inputMint,
-                inputVault,
-                outputAmount: outputAmount,
-                outputMint,
-                outputVault,
-                transactionIndex: ins.transactionIndex,
-                instructionAddress: ins.instructionAddress,
+                id: `${txId}/${ins.transactionIndex}`,
+                block: {number: block.header.number, hash: block.header.hash},
+                instruction: {
+                  address: ins.instructionAddress,
+                },
+                account: srcTransfer.accounts.authority,
+                input: {
+                  amount: inputAmount,
+                  mint: inputMint,
+                  vault: inputVault,
+                },
+                output: {
+                  amount: outputAmount,
+                  mint: outputMint,
+                  vault: outputVault,
+                },
+                transaction: {
+                  id: txId,
+                  index: ins.transactionIndex,
+                },
+                timestamp: new Date(block.header.timestamp * 1000),
+                offset,
               });
             }
 
