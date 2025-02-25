@@ -1,5 +1,4 @@
 import path from 'node:path';
-import * as process from 'node:process';
 import { ClickhouseState } from '../../core/states/clickhouse_state';
 import { createLogger, formatNumber } from '../../examples/utils';
 import { SolanaSwapsStream } from '../../streams/solana_swaps/solana_swaps';
@@ -36,9 +35,8 @@ async function main() {
   const ds = new SolanaSwapsStream({
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     args: {
-      // fromBlock: 240_000_000,
-      fromBlock: 252_723_898,
-      // toBlock: 242_936_378,
+      fromBlock: 240_000_000,
+      // fromBlock: 269021917,
       tokens: TRACKED_TOKENS,
     },
     logger,

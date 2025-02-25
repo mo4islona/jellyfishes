@@ -58,9 +58,17 @@ export abstract class AbstractStream<
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 
-  ack<T extends any[]>(batch: Res[], ...args: T): Promise<unknown> {
+  async ack<T extends any[]>(batch: Res[], ...args: T) {
     if (!this.options.state) {
-      throw new Error('State is not defined. Please set the state in the stream options.');
+      this.logger.warn(
+        [
+          '====================================',
+          'State is not defined. Please set a state to make a stream resumable',
+          '====================================',
+        ].join('\n'),
+      );
+
+      return;
     }
 
     // Get last offset
