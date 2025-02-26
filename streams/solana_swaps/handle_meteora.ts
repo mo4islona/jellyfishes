@@ -89,9 +89,14 @@ export function handleMeteoraDamm(
 export function handleMeteoraDlmm(ins: Instruction, block: Block): SolanaSwapTransfer {
   // const swap = dlmm.instructions.swap.decode(ins);
 
-  const [src, dest] = getInnerTransfersByLevel(ins, block.instructions, 1).map((t) => {
+  const transfers = getInnerTransfersByLevel(ins, block.instructions, 1).map((t) => {
     return tokenProgram.instructions.transferChecked.decode(t);
   });
+
+  // DAMM could have internal transfers, the last two transfers are final src and dest
+  // TODO if there are more than 2 transfers, is the first one fee?
+  // 2fsnqWFXfmPkNPMTe2BVrDgSEhgezDTtvXxedrDHJrrLXNWR7K2DpPZ13N2DppGrYmTpofAfToXzaqyBWiumJGZ4
+  const [src, dest] = transfers.slice(-2);
 
   const tokenBalances = getInstructionBalances(ins, block);
   const inAcc = tokenBalances.find((b) => b.account === src.accounts.destination);
