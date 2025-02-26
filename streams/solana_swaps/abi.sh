@@ -9,3 +9,4 @@ npx squid-solana-typegen abi LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo#dlmm
 npx squid-solana-typegen abi CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK#clmm
 
 
+
