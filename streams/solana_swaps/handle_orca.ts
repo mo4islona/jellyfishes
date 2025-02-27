@@ -1,4 +1,3 @@
-import assert from 'assert';
 import * as tokenProgram from './abi/tokenProgram';
 // import * as whirlpool from './abi/whirlpool';
 import { SolanaSwapTransfer } from './solana_swaps';

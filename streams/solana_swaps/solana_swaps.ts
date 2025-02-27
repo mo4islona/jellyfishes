@@ -1,15 +1,22 @@
-import { getInstructionDescriptor } from '@subsquid/solana-stream';
+import { getInstructionData, getInstructionDescriptor } from '@subsquid/solana-stream';
+import { toHex } from '@subsquid/util-internal-hex';
 import { AbstractStream, BlockRef } from '../../core/abstract_stream';
-import * as clmm from './abi/clmm/index';
-import * as damm from './abi/damm/index';
-import * as dlmm from './abi/dlmm/index';
-import * as whirlpool from './abi/whirlpool/index';
+import * as meteora_damm from './abi/meteora_damm/index';
+import * as meteora_dlmm from './abi/meteora_dlmm/index';
+import * as whirlpool from './abi/orca_whirlpool/index';
+import * as raydium_amm from './abi/raydium_amm/index';
+import * as raydium_clmm from './abi/raydium_clmm/index';
 import { handleMeteoraDamm, handleMeteoraDlmm } from './handle_meteora';
 import { handleWhirlpool } from './handle_orca';
-import { handleRadiumClmm } from './handle_radium';
-import { getTransactionHash } from './utils';
+import { handleRaydiumAmm, handleRaydiumClmm } from './handle_raydium';
+import { Instruction, getTransactionHash } from './utils';
 
-export type SwapType = 'orca_whirlpool' | 'meteora_damm' | 'meteora_dlmm' | 'radium_clmm';
+export type SwapType =
+  | 'orca_whirlpool'
+  | 'meteora_damm'
+  | 'meteora_dlmm'
+  | 'raydium_clmm'
+  | 'raydium_amm';
 
 export type SolanaSwap = {
   id: string;
@@ -38,6 +45,10 @@ function isProgramInstruction(ins: any, programId: string, d8: string) {
   return ins.programId === programId && getInstructionDescriptor(ins) === d8;
 }
 
+export function getInstructionD1(instruction: Instruction) {
+  return toHex(getInstructionData(instruction)).slice(0, 4);
+}
+
 export class SolanaSwapsStream extends AbstractStream<
   {
     fromBlock: number;
@@ -53,7 +64,13 @@ export class SolanaSwapsStream extends AbstractStream<
 
     const offset = await this.getState({number: args.fromBlock, hash: ''});
 
-    const types = args.type || ['orca_whirlpool', 'meteora_damm', 'meteora_dlmm', 'radium_clmm'];
+    const types = args.type || [
+      'orca_whirlpool',
+      'meteora_damm',
+      'meteora_dlmm',
+      'raydium_clmm',
+      'raydium_amm',
+    ];
 
     const source = this.portal.getFinalizedStream({
       type: 'solana',
@@ -96,8 +113,8 @@ export class SolanaSwapsStream extends AbstractStream<
             };
           case 'meteora_damm':
             return {
-              programId: [damm.programId],
-              d8: [damm.instructions.swap.d8],
+              programId: [meteora_damm.programId],
+              d8: [meteora_damm.instructions.swap.d8],
               isCommitted: true,
               innerInstructions: true,
               transaction: true,
@@ -105,17 +122,30 @@ export class SolanaSwapsStream extends AbstractStream<
             };
           case 'meteora_dlmm':
             return {
-              programId: [dlmm.programId],
-              d8: [dlmm.instructions.swap.d8],
+              programId: [meteora_dlmm.programId],
+              d8: [meteora_dlmm.instructions.swap.d8, meteora_dlmm.instructions.swapExactOut.d8],
               isCommitted: true,
               innerInstructions: true,
               transaction: true,
               transactionTokenBalances: true,
             };
-          case 'radium_clmm':
+          case 'raydium_clmm':
             return {
-              programId: [clmm.programId],
-              d8: [clmm.instructions.swap.d8],
+              programId: [raydium_clmm.programId],
+              d8: [
+                raydium_clmm.instructions.swap.d8,
+                raydium_clmm.instructions.swapV2.d8,
+                raydium_clmm.instructions.swapRouterBaseIn.d8,
+              ],
+              isCommitted: true,
+              innerInstructions: true,
+              transaction: true,
+              transactionTokenBalances: true,
+            };
+          case 'raydium_amm':
+            return {
+              programId: [raydium_amm.programId],
+              d1: [raydium_amm.instructions.swapBaseIn.d1, raydium_amm.instructions.swapBaseOut.d1],
               isCommitted: true,
               innerInstructions: true,
               transaction: true,
@@ -141,14 +171,46 @@ export class SolanaSwapsStream extends AbstractStream<
 
             for (const ins of block.instructions) {
               let swap: SolanaSwapTransfer | null = null;
-              if (isProgramInstruction(ins, whirlpool.programId, whirlpool.instructions.swap.d8)) {
-                swap = handleWhirlpool(ins, block);
-              } else if (isProgramInstruction(ins, damm.programId, damm.instructions.swap.d8)) {
-                swap = handleMeteoraDamm(this.logger, ins, block);
-              } else if (isProgramInstruction(ins, dlmm.programId, dlmm.instructions.swap.d8)) {
-                swap = handleMeteoraDlmm(ins, block);
-              } else if (isProgramInstruction(ins, clmm.programId, clmm.instructions.swap.d8)) {
-                swap = handleRadiumClmm(ins, block);
+
+              switch (ins.programId) {
+                case whirlpool.programId:
+                  if (whirlpool.instructions.swap.d8 === getInstructionDescriptor(ins)) {
+                    swap = handleWhirlpool(ins, block);
+                    break;
+                  }
+                  break;
+                case meteora_damm.programId:
+                  switch (getInstructionDescriptor(ins)) {
+                    case meteora_damm.instructions.swap.d8:
+                      swap = handleMeteoraDamm(this.logger, ins, block);
+                      break;
+                  }
+                  break;
+                case meteora_dlmm.programId:
+                  switch (getInstructionDescriptor(ins)) {
+                    case meteora_dlmm.instructions.swap.d8:
+                    case meteora_dlmm.instructions.swapExactOut.d8:
+                      swap = handleMeteoraDlmm(ins, block);
+                      break;
+                  }
+                  break;
+                case raydium_amm.programId:
+                  switch (getInstructionD1(ins)) {
+                    case raydium_amm.instructions.swapBaseIn.d1:
+                    case raydium_amm.instructions.swapBaseOut.d1:
+                      swap = handleRaydiumAmm(ins, block);
+                      break;
+                  }
+                  break;
+                case raydium_clmm.programId:
+                  switch (getInstructionD1(ins)) {
+                    case raydium_clmm.instructions.swap.d8:
+                    case raydium_clmm.instructions.swapV2.d8:
+                    case raydium_clmm.instructions.swapRouterBaseIn.d8:
+                      swap = handleRaydiumClmm(ins, block);
+                      break;
+                  }
+                  break;
               }
 
               if (!swap) continue;

@@ -36,6 +36,9 @@ async function main() {
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     args: {
       fromBlock: 240_000_000,
+
+      // fromBlock: 300279448,
+      // toBlock: 300279448,
       // fromBlock: 269021917,
       tokens: TRACKED_TOKENS,
     },

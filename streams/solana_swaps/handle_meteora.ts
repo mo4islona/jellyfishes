@@ -1,5 +1,4 @@
 import { Logger } from '../../core/abstract_stream';
-import * as damm from './abi/damm';
 import * as tokenProgram from './abi/tokenProgram';
 import { SolanaSwapTransfer } from './solana_swaps';
 import {
@@ -16,12 +15,12 @@ export function handleMeteoraDamm(
   ins: Instruction,
   block: Block,
 ): SolanaSwapTransfer | null {
-  const swap = damm.instructions.swap.decode(ins);
+  // const swap = damm.instructions.swap.decode(ins);
 
   // We skip such zero transfers, this doesn't make sense
-  if (swap.data.inAmount === 0n) {
-    return null;
-  }
+  // if (swap.data.inAmount === 0n) {
+  //   return null;
+  // }
 
   /**
    * Meteora DAMM has two transfers on the second level and also other tokenProgram instructions
@@ -31,6 +30,7 @@ export function handleMeteoraDamm(
       if (inner.transactionIndex !== ins.transactionIndex) return false;
       if (inner.instructionAddress.length <= ins.instructionAddress.length) return false;
       if (inner.programId !== tokenProgram.programId) return false;
+
       if (getInstructionD1(inner) !== tokenProgram.instructions.transfer.d1) {
         return false;
       }
@@ -76,12 +76,10 @@ export function handleMeteoraDamm(
     input: {
       amount: src.data.amount,
       mint: inputMint,
-      // vault: swap.accounts.aVault,
     },
     output: {
       amount: dest.data.amount,
       mint: outputMint,
-      // vault: swap.accounts.bVault,
     },
   };
 }
