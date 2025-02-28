@@ -31,6 +31,8 @@ export type StreamOptions<Args extends {}, DecodedOffset extends {}> = {
   }) => Promise<unknown> | unknown;
 };
 
+const logged = new Map();
+
 export abstract class AbstractStream<
   Args extends {},
   Res extends { offset: Offset },
@@ -58,9 +60,22 @@ export abstract class AbstractStream<
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 
+  warnOnlyOnce(message: string) {
+    if (logged.has(message)) return;
+
+    this.logger.warn(message);
+
+    logged.set(message, true);
+  }
+
   async ack<T extends any[]>(batch: Res[], ...args: T) {
+    // Get last offset
+    const last = batch[batch.length - 1].offset;
+    // Calculate progress and speed
+    this.progress?.track(this.decodeOffset(last));
+
     if (!this.options.state) {
-      this.logger.warn(
+      this.warnOnlyOnce(
         [
           '====================================',
           'State is not defined. Please set a state to make a stream resumable',
@@ -70,11 +85,6 @@ export abstract class AbstractStream<
 
       return;
     }
-
-    // Get last offset
-    const last = batch[batch.length - 1].offset;
-    // Calculate progress and speed
-    this.progress?.track(this.decodeOffset(last));
     // Save last offset
     return this.options.state.saveOffset(last, ...args);
   }
