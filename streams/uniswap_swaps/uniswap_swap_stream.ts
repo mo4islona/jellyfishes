@@ -4,21 +4,24 @@ import { events as abi_events } from './abi';
 export type UniswapSwap = {
   sender: string;
   recipient: string;
+  pool: string;
   liquidity: bigint;
   tick: number;
   amount0: bigint;
   amount1: bigint;
   sqrtPriceX96: bigint;
-  contract_address: string;
   block: BlockRef;
+  transaction: {
+    hash: string;
+    index: number;
+  };
   timestamp: Date;
   offset: Offset;
 };
 
-export class UniswapStream extends AbstractStream<
+export class UniswapSwapStream extends AbstractStream<
   {
     fromBlock: number;
-    pairs?: string[];
   },
   UniswapSwap
 > {
@@ -49,12 +52,8 @@ export class UniswapStream extends AbstractStream<
           logIndex: true,
           transactionIndex: true,
         },
-        stateDiff: {
-          kind: true,
-          next: true,
-          prev: true,
-        },
       },
+
       logs: [
         {
           topic0: [abi_events.Swap.topic],
@@ -87,9 +86,13 @@ export class UniswapStream extends AbstractStream<
                   amount0: data.amount0,
                   amount1: data.amount1,
                   sqrtPriceX96: data.sqrtPriceX96,
-                  contract_address: l.address,
+                  pool: l.address,
                   block: block.header,
-                  timestamp: new Date(block.header.timestamp),
+                  transaction: {
+                    hash: l.transactionHash,
+                    index: l.transactionIndex,
+                  },
+                  timestamp: new Date(block.header.timestamp * 1000),
                   offset,
                 };
               });

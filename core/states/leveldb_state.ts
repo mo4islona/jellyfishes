@@ -23,19 +23,22 @@ export class LevelDbState extends AbstractState implements State {
   async saveOffset(offset: Offset) {
     await this.client.put(
       this.options.id,
-      JSON.stringify({
+      {
         initial: this.initial,
-        offset: offset,
-      }),
+        current: offset,
+      },
       {valueEncoding: 'json'},
     );
   }
 
   async getOffset(defaultValue: Offset) {
     try {
-      const res = await this.client.get(this.options.id, {valueEncoding: 'json'});
+      const {current, initial} = await this.client.get<string, any>(this.options.id, {
+        valueEncoding: 'json',
+      });
+      this.initial = initial;
 
-      return res as any;
+      return {current, initial};
     } catch (e: unknown) {
       this.initial = defaultValue;
       await this.saveOffset(defaultValue);

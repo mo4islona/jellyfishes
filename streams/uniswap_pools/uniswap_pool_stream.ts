@@ -1,5 +1,5 @@
 import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
-import { events as abi } from './abi.js';
+import { events as abi } from './abi';
 
 export const FACTORY_ADDRESS = '0x1f98431c8ad98523631ae4a59f267346ea31f984';
 export const FACTORY_DEPLOYED_AT = 12369621;
