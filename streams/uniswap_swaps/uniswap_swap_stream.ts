@@ -1,14 +1,31 @@
 import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
-import { events as abi_events } from './abi';
+import { events as swapsEvents } from './swaps';
+import { events as factoryEvents } from './factory';
+import { DatabaseSync, StatementSync } from 'node:sqlite';
+import { uniq } from 'lodash';
+
+type PoolMetadata = { pool: string; token_a: string; token_b: string; factory_address: string };
 
 export type UniswapSwap = {
   sender: string;
   recipient: string;
-  pool: string;
+
+  tokenA: {
+    amount: bigint;
+    address?: string;
+  };
+  tokenB: {
+    amount: bigint;
+    address?: string;
+  };
+  pool: {
+    address: string;
+  };
+  factory: {
+    address: string;
+  };
   liquidity: bigint;
   tick: number;
-  amount0: bigint;
-  amount1: bigint;
   sqrtPriceX96: bigint;
   block: BlockRef;
   transaction: {
@@ -19,12 +36,29 @@ export type UniswapSwap = {
   offset: Offset;
 };
 
-export class UniswapSwapStream extends AbstractStream<
-  {
-    fromBlock: number;
-  },
-  UniswapSwap
-> {
+type Args = {
+  fromBlock: number;
+  factoryContract?: string;
+  dbPath: string;
+};
+
+export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
+  db: DatabaseSync;
+  statements: Record<string, StatementSync>;
+
+  initialize() {
+    this.db = new DatabaseSync(this.options.args.dbPath);
+    // this.db.exec('PRAGMA journal_mode = WAL');
+    this.db.exec(
+      'CREATE TABLE IF NOT EXISTS "uniswap_pools" (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, factory_address TEXT)',
+    );
+    this.statements = {
+      insert: this.db.prepare(
+        'INSERT OR IGNORE INTO "uniswap_pools" VALUES (:pool, :token_a, :token_b, :factory_address)',
+      ),
+    };
+  }
+
   async stream(): Promise<ReadableStream<UniswapSwap[]>> {
     const {args} = this.options;
 
@@ -53,10 +87,13 @@ export class UniswapSwapStream extends AbstractStream<
           transactionIndex: true,
         },
       },
-
       logs: [
         {
-          topic0: [abi_events.Swap.topic],
+          address: [args.factoryContract],
+          topic0: [factoryEvents.PoolCreated.topic],
+        },
+        {
+          topic0: [swapsEvents.Swap.topic],
         },
       ],
     });
@@ -64,29 +101,51 @@ export class UniswapSwapStream extends AbstractStream<
     return source.pipeThrough(
       new TransformStream({
         transform: ({blocks}, controller) => {
+          this.savePoolMetadata(blocks);
+
           // FIXME
-          const events = blocks.flatMap((block: any) => {
-            if (!block.logs) return [];
+          const events = blocks
+            .flatMap((block: any) => {
+              if (!block.logs) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
+              const offset = this.encodeOffset({
+                number: block.header.number,
+                hash: block.header.hash,
+              });
 
-            return block.logs
-              .filter((l) => abi_events.Swap.is(l))
-              .map((l): UniswapSwap => {
-                const data = abi_events.Swap.decode(l);
+              const logs = block.logs.filter((l) => swapsEvents.Swap.is(l));
+              const metadata = this.getPoolMetadata(logs);
+
+              return logs.map((l): UniswapSwap | null => {
+                const poolMetadata = metadata[l.address];
+
+                if (!poolMetadata) return null;
+
+                const data = swapsEvents.Swap.decode(l);
 
                 return {
                   sender: data.sender,
                   recipient: data.recipient,
+
+                  tokenA: {
+                    address: poolMetadata?.token_a,
+                    amount: data.amount0,
+                  },
+                  tokenB: {
+                    address: poolMetadata?.token_b,
+                    amount: data.amount1,
+                  },
+                  factory: {
+                    address: poolMetadata?.factory_address,
+                  },
+                  pool: {
+                    address: l.address,
+                  },
+
                   liquidity: data.liquidity,
                   tick: data.tick,
-                  amount0: data.amount0,
-                  amount1: data.amount1,
                   sqrtPriceX96: data.sqrtPriceX96,
-                  pool: l.address,
+
                   block: block.header,
                   transaction: {
                     hash: l.transactionHash,
@@ -96,13 +155,64 @@ export class UniswapSwapStream extends AbstractStream<
                   offset,
                 };
               });
-          });
+            })
+            .filter(Boolean);
 
           if (!events.length) return;
 
           controller.enqueue(events);
         },
       }),
+    );
+  }
+
+  savePoolMetadata(blocks: any[]) {
+    const pools = blocks.flatMap((block: any) => {
+      if (!block.logs) return [];
+
+      return block.logs
+        .filter((l) => factoryEvents.PoolCreated.is(l))
+        .map((l): PoolMetadata => {
+          const data = factoryEvents.PoolCreated.decode(l);
+
+          return {
+            pool: data.pool,
+            token_a: data.token0,
+            token_b: data.token1,
+            factory_address: l.address,
+          };
+        });
+    });
+
+    if (!pools.length) return;
+
+    this.logger.debug(`saving ${pools.length} pools`);
+
+    // FIXME batch?
+    for (const pool of pools) {
+      this.statements.insert.run(pool);
+    }
+  }
+
+  getPoolMetadata(logs: { address: string }[]): Record<string, PoolMetadata> {
+    const pools = uniq(logs.map((l) => l.address));
+    if (!pools.length) return {};
+
+    const params = new Array(pools.length).fill('?').join(',');
+    const select = this.db.prepare(`
+        SELECT *
+        FROM "uniswap_pools"
+        WHERE "pool" IN (${params})
+    `);
+
+    const poolsMetadata = select.all(...pools) as PoolMetadata[];
+
+    return poolsMetadata.reduce(
+      (res, pool) => ({
+        ...res,
+        [pool.pool]: pool,
+      }),
+      {},
     );
   }
 }

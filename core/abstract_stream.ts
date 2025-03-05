@@ -59,7 +59,12 @@ export abstract class AbstractStream<
 
       return {number: latest?.number || 0} as DecodedOffset;
     };
+
+    // Not best design, works for now
+    this.initialize?.();
   }
+
+  abstract initialize(): void;
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 

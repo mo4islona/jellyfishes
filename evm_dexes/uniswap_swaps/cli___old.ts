@@ -7,7 +7,10 @@ import {
   ensureTables,
   toUnixTime,
 } from '../../solana_dexes/clickhouse';
-import { UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
+import { UniswapSwap, UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
+import { uniq } from 'lodash';
+import * as process from 'node:process';
+import { DatabaseSync } from 'node:sqlite';
 import { getConfig } from '../config';
 
 function denominate(amount: bigint) {
@@ -16,10 +19,25 @@ function denominate(amount: bigint) {
 
 const config = getConfig();
 
+const db = new DatabaseSync(config.dbPath, {readOnly: true});
+db.exec('PRAGMA journal_mode = WAL');
+
 const clickhouse = createClickhouseClient();
 const logger = createLogger('unswap.v3 swaps').child({network: config.network});
 
 logger.info(`Local database: ${config.dbPath}`);
+
+// /**
+//  * TODO what is what? should we just remove it from stream?
+//  */
+const BLACK_LIST_POOLS = {
+  'ethereum-mainnet': {
+    ['0x01113a97c0273f3c7a96d304d9a034992ddf0d96'.toLowerCase()]: 'unknown_contract',
+  },
+  'base-mainnet': {
+    ['0x06A525706A59cEE7813710DEb5176cBb74298410'.toLowerCase()]: 'unknown_contract',
+  },
+};
 
 async function main() {
   const ds = new UniswapSwapStream({
@@ -65,22 +83,35 @@ async function main() {
   for await (const swaps of await ds.stream()) {
     await clickhouse.insert({
       table: 'uniswap_v3_swaps_raw',
-      values: swaps.map((s) => {
-        return {
-          factory_address: s.factory.address,
-          network: config.network,
-          block_number: s.block.number,
-          transaction_hash: s.transaction.hash,
-          transaction_index: s.transaction.index,
-          account: s.sender,
-          token_a: s.tokenA.address,
-          token_b: s.tokenB.address,
-          amount_a: denominate(s.tokenA.amount).toString(),
-          amount_b: denominate(s.tokenB.amount).toString(),
-          timestamp: toUnixTime(s.timestamp),
-          sign: 1,
-        };
-      }),
+      values: swaps
+        .filter((s) => !BLACK_LIST_POOLS[config.network][s.pool])
+        .map((s) => {
+          const pool = pools[s.pool];
+
+          if (!pool) {
+            // TODO improve message, maybe we have to wait until metadata is ready?
+            logger.error({
+              message: `There is no metadata for a pool ${s.pool}`,
+              swap: s,
+            });
+            process.exit();
+          }
+
+          return {
+            factory_address: pool.factory_address,
+            network: config.network,
+            block_number: s.block.number,
+            transaction_hash: s.transaction.hash,
+            transaction_index: s.transaction.index,
+            account: s.sender,
+            token_a: pool.token_a,
+            token_b: pool.token_b,
+            amount_a: denominate(s.amount0).toString(),
+            amount_b: denominate(s.amount1).toString(),
+            timestamp: toUnixTime(s.timestamp),
+            sign: 1,
+          };
+        }),
       format: 'JSONEachRow',
     });
 

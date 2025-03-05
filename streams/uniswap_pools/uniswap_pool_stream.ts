@@ -1,18 +1,22 @@
 import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
-import { events as abi } from './abi';
+import { events as abiUniswapV3 } from './uniswap';
+import { events as abiAlgebraV1 } from './algebra';
 
 export type UniswapPool = {
   pool: string;
   factoryAddress: string;
   tokenA: string;
   tokenB: string;
-  fee: number;
-  tickSpacing: number;
+
   block: BlockRef;
   transaction: {
     hash: string;
     index: number;
   };
+
+  fee?: number;
+  tickSpacing?: number;
+
   timestamp: Date;
   offset: Offset;
 };
@@ -54,7 +58,7 @@ export class UniswapPoolStream extends AbstractStream<
 
       logs: [
         {
-          topic0: [abi.PoolCreated.topic],
+          topic0: [abiUniswapV3.PoolCreated.topic, abiAlgebraV1.Pool.topic],
           transaction: true,
         },
       ],
@@ -72,27 +76,48 @@ export class UniswapPoolStream extends AbstractStream<
               hash: block.header.hash,
             });
 
-            return block.logs
-              .filter((l) => abi.PoolCreated.is(l))
-              .map((l): UniswapPool => {
-                const data = abi.PoolCreated.decode(l);
+            const res = [];
 
-                return {
-                  pool: data.pool,
-                  block: block.header,
-                  factoryAddress: l.address,
-                  tokenA: data.token0,
-                  tokenB: data.token1,
-                  tickSpacing: data.tickSpacing,
-                  fee: data.fee,
-                  transaction: {
-                    hash: l.transactionHash,
-                    index: l.transactionIndex,
-                  },
-                  timestamp: new Date(block.header.timestamp * 1000),
-                  offset,
-                };
-              });
+            return block.logs
+              .map((l): UniswapPool | null => {
+                if (abiAlgebraV1.Pool.is(l)) {
+                  const data = abiAlgebraV1.Pool.decode(l);
+                  return {
+                    pool: data.pool,
+                    block: block.header,
+                    factoryAddress: l.address,
+                    tokenA: data.token0,
+                    tokenB: data.token1,
+                    transaction: {
+                      hash: l.transactionHash,
+                      index: l.transactionIndex,
+                    },
+                    timestamp: new Date(block.header.timestamp * 1000),
+                    offset,
+                  };
+                } else if (abiUniswapV3.PoolCreated.is(l)) {
+                  const data = abiUniswapV3.PoolCreated.decode(l);
+
+                  return {
+                    pool: data.pool,
+                    block: block.header,
+                    factoryAddress: l.address,
+                    tokenA: data.token0,
+                    tokenB: data.token1,
+                    tickSpacing: data.tickSpacing,
+                    fee: data.fee,
+                    transaction: {
+                      hash: l.transactionHash,
+                      index: l.transactionIndex,
+                    },
+                    timestamp: new Date(block.header.timestamp * 1000),
+                    offset,
+                  };
+                }
+
+                return null;
+              })
+              .filter(Boolean);
           });
 
           if (!events.length) return;
