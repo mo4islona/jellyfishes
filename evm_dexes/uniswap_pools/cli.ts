@@ -41,16 +41,14 @@ async function main() {
   });
 
   db.exec(
-    'CREATE TABLE IF NOT EXISTS uniswap_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT)',
+    'CREATE TABLE IF NOT EXISTS uniswap_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, factory_address TEXT)',
   );
 
-  const insert = db.prepare(
-    'INSERT OR IGNORE INTO uniswap_pools (pool, token_a, token_b) VALUES (?, ?, ?)',
-  );
+  const insert = db.prepare('INSERT OR IGNORE INTO uniswap_pools VALUES (?, ?, ?, ?)');
 
   for await (const pools of await ds.stream()) {
     for await (const pool of pools) {
-      insert.run(pool.pool, pool.tokenA, pool.tokenB);
+      insert.run(pool.pool, pool.tokenA, pool.tokenB, pool.factoryAddress);
     }
 
     await ds.ack(pools);

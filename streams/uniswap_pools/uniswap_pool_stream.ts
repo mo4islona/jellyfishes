@@ -6,6 +6,7 @@ export const FACTORY_DEPLOYED_AT = 12369621;
 
 export type UniswapPool = {
   pool: string;
+  factoryAddress: string;
   tokenA: string;
   tokenB: string;
   fee: number;
@@ -82,6 +83,7 @@ export class UniswapPoolStream extends AbstractStream<
                 return {
                   pool: data.pool,
                   block: block.header,
+                  factoryAddress: l.address,
                   tokenA: data.token0,
                   tokenB: data.token1,
                   tickSpacing: data.tickSpacing,

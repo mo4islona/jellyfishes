@@ -6,7 +6,7 @@ type Options = { id?: string; table: string };
 
 export class SqliteState extends AbstractState implements State {
   options: Required<Options>;
-  statements: Record<'update' | 'select', StatementSync>;
+  statements: Record<'update' | 'select' | 'insert', StatementSync>;
 
   constructor(
     private client: DatabaseSync,
@@ -42,40 +42,48 @@ export class SqliteState extends AbstractState implements State {
 
   prepare() {
     this.statements = {
-      update: this.client.prepare(`
-          UPDATE "${this.options.table}"
-          SET "current" = ?
-          WHERE "id" = ?
-      `),
       select: this.client.prepare(`
           SELECT *
-          FROM ${this.options.table}
-          WHERE id = ?
+          FROM "${this.options.table}"
+          WHERE "id" = :id
+      `),
+      update: this.client.prepare(`
+          UPDATE "${this.options.table}"
+          SET "current" = :current
+          WHERE "id" = :id
+      `),
+      insert: this.client.prepare(`
+          INSERT INTO "${this.options.table}" (id, current, initial)
+          VALUES (:id, :current, :initial)
       `),
     };
   }
 
   async saveOffset(offset: Offset) {
-    this.statements.update.run(offset, this.options.id);
+    const res = this.statements.update.run({current: offset, id: this.options.id});
+
+    if (res.changes === 0) {
+      throw new Error(
+        `Failed to update offset for "${this.options.id}" in table "${this.options.table}"`,
+      );
+    }
   }
 
   async getOffset(defaultValue: Offset) {
-    try {
-      const row = this.statements.select.get(this.options.id) as
-        | { initial: string; current: string }
-        | undefined;
+    const row = this.statements.select.get({id: this.options.id}) as
+      | { initial: string; current: string }
+      | undefined;
 
-      if (!row) {
-        await this.saveOffset(defaultValue);
+    if (row) return row;
 
-        return {current: defaultValue, initial: defaultValue};
-      }
+    this.statements.insert.run({
+      current: defaultValue,
+      id: this.options.id,
+      initial: defaultValue,
+    });
 
-      return {current: row.current, initial: row.initial};
-    } catch (e: unknown) {
-      await this.saveOffset(defaultValue);
+    await this.saveOffset(defaultValue);
 
-      return {current: defaultValue, initial: defaultValue};
-    }
+    return {current: defaultValue, initial: defaultValue};
   }
 }
