@@ -10,9 +10,8 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw
     account             String,
     block_number        UInt32,
     transaction_index   UInt16,
-    instruction_address UInt16,
     transaction_hash    String,
     sign                Int8
 ) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp) -- DATA WILL BE SPLIT BY MONTH
-      ORDER BY (block_number, transaction_index, instruction_address);
+      ORDER BY (block_number, transaction_index);

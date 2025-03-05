@@ -996,6 +996,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/lodash@npm:^4":
+  version: 4.17.16
+  resolution: "@types/lodash@npm:4.17.16"
+  checksum: 10c0/cf017901b8ab1d7aabc86d5189d9288f4f99f19a75caf020c0e2c77b8d4cead4db0d0b842d009b029339f92399f49f34377dd7c2721053388f251778b4c23534
+  languageName: node
+  linkType: hard
+
 "@types/node@npm:*, @types/node@npm:^22.13.1":
   version: 22.13.9
   resolution: "@types/node@npm:22.13.9"
@@ -2224,6 +2231,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lodash@npm:^4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: 10c0/d8cbea072bb08655bb4c989da418994b073a608dffa608b09ac04b43a791b12aeae7cd7ad919aa4c925f33b48490b5cfe6c1f71d827956071dae2e7bb3a6b74c
+  languageName: node
+  linkType: hard
+
 "lower-case@npm:^2.0.2":
   version: 2.0.2
   resolution: "lower-case@npm:2.0.2"
@@ -2879,8 +2893,10 @@ __metadata:
     "@subsquid/portal-client": "npm:0.0.1-portal-api.d48fcb"
     "@subsquid/solana-stream": "npm:1.0.0-portal-api.d48fcb"
     "@subsquid/solana-typegen": "npm:^0.4.0"
+    "@types/lodash": "npm:^4"
     "@types/node": "npm:^22.13.1"
     classic-level: "npm:^2.0.0"
+    lodash: "npm:^4.17.21"
     pg: "npm:^8.13.1"
     pino: "npm:^9.6.0"
     pino-pretty: "npm:^13.0.0"
