@@ -7,32 +7,42 @@ import {
   ensureTables,
   toUnixTime,
 } from '../../solana_dexes/clickhouse';
-import { ClassicLevel } from 'classic-level';
 import { UniswapSwap, UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
 import { uniq } from 'lodash';
 import * as process from 'node:process';
+import { DatabaseSync } from 'node:sqlite';
 
 function denominate(amount: bigint) {
   return Number(amount) / 10 ** 18;
 }
 
-const poolMetadataDb = new ClassicLevel('./db', {valueEncoding: 'json'});
+const db = new DatabaseSync('./uniswap-pools.db', {readOnly: true});
+
 const clickhouse = createClickhouseClient();
 const logger = createLogger('unswap_swaps');
 
-async function getPoolMetadata(
-  swaps: UniswapSwap[],
-): Promise<Record<string, { tokenA: string; tokenB: string }>> {
+const POOLS = {
+  '0x1f98431c8ad98523631ae4a59f267346ea31f984': 'uniswap_v3',
+};
+
+type PoolMetadata = { pool: string; token_a: string; token_b: string; factory_address: string };
+
+function getPoolMetadata(swaps: UniswapSwap[]): Record<string, PoolMetadata> {
   const pools = uniq(swaps.map((s) => s.pool));
-  const poolsMetadata = await poolMetadataDb.getMany<string, { tokenA: string; tokenB: string }>(
-    pools,
-    {valueEncoding: 'json'},
-  );
+
+  const params = new Array(pools.length).fill('?').join(',');
+  const select = db.prepare(`
+      SELECT *
+      FROM "uniswap_pools"
+      WHERE "pool" IN (${params})
+  `);
+
+  const poolsMetadata = select.all(...pools) as PoolMetadata[];
 
   return poolsMetadata.reduce(
-    (res, pool, currentIndex) => ({
+    (res, pool) => ({
       ...res,
-      [pools[currentIndex]]: pool,
+      [pool.pool]: pool,
     }),
     {},
   );
@@ -78,7 +88,7 @@ async function main() {
   await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
 
   for await (const swaps of await ds.stream()) {
-    const pools = await getPoolMetadata(swaps);
+    const pools = getPoolMetadata(swaps);
 
     await clickhouse.insert({
       table: 'uniswap_v3_swaps_raw',
@@ -93,13 +103,13 @@ async function main() {
           }
 
           return {
-            dex: 'uniswap_v3',
+            dex: POOLS[s.pool] || s.pool,
             block_number: s.block.number,
             transaction_hash: s.transaction.hash,
             transaction_index: s.transaction.index,
             account: s.sender,
-            token_a: pool.tokenA,
-            token_b: pool.tokenB,
+            token_a: pool.token_a,
+            token_b: pool.token_b,
             amount_a: denominate(s.amount0).toString(),
             amount_b: denominate(s.amount1).toString(),
             timestamp: toUnixTime(s.timestamp),

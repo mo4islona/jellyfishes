@@ -47,6 +47,7 @@ async function main() {
   const insert = db.prepare('INSERT OR IGNORE INTO uniswap_pools VALUES (?, ?, ?, ?)');
 
   for await (const pools of await ds.stream()) {
+    // TODO Do we need batch insert here? On local laptop with fast SSD is 50-100ms
     for await (const pool of pools) {
       insert.run(pool.pool, pool.tokenA, pool.tokenB, pool.factoryAddress);
     }
