@@ -7,7 +7,10 @@ import {
   BaseHandler,
   LiquidityEvent,
   Protocol,
+  InitializeLiquidity,
 } from './handlers';
+import { PoolRepository } from './repository';
+import { Instruction } from '../solana_swaps/utils';
 
 interface InstructionFilter {
   programId: string[];
@@ -85,6 +88,7 @@ export class SolanaLiquidityStream extends AbstractStream<
     fromBlock: number;
     toBlock?: number;
     type?: Protocol[];
+    dbPath?: string;
   },
   LiquidityEvent,
   { number: number; hash: string }
@@ -93,6 +97,17 @@ export class SolanaLiquidityStream extends AbstractStream<
     [raydium_amm.programId]: new RaydiumAmmHandler(),
     [meteora_damm.programId]: new MeteoraAmmHandler(),
   };
+
+  private poolRepository?: PoolRepository;
+
+  initialize() {
+    const { args } = this.options;
+
+    // Initialize pool repository if dbPath is provided
+    if (args.dbPath) {
+      this.poolRepository = new PoolRepository(args.dbPath, this.logger);
+    }
+  }
 
   async stream(): Promise<ReadableStream<LiquidityEvent[]>> {
     const { args } = this.options;
@@ -108,6 +123,11 @@ export class SolanaLiquidityStream extends AbstractStream<
     return source.pipeThrough(
       new TransformStream({
         transform: ({ blocks }, controller) => {
+          // Save pool metadata for initialize events
+          if (this.poolRepository) {
+            this.savePoolMetadata(blocks);
+          }
+
           blocks.flatMap((block: any) => {
             const offset = this.encodeOffset({
               number: block.header.number,
@@ -130,5 +150,96 @@ export class SolanaLiquidityStream extends AbstractStream<
         },
       }),
     );
+  }
+
+  /**
+   * Check if an instruction is an initialize pool instruction
+   */
+  private isInitializePoolInstruction(instruction: Instruction): boolean {
+    // Check Raydium initialize instructions
+    if (instruction.programId === raydium_amm.programId) {
+      const d1 = instruction.data?.slice(0, 8)?.toString('hex');
+      return d1 === raydium_amm.instructions.initialize2.d1;
+    }
+
+    // Check Meteora initialize instructions
+    if (instruction.programId === meteora_damm.programId) {
+      const d8 = instruction.data?.slice(0, 8)?.toString('hex');
+      return [
+        meteora_damm.instructions.bootstrapLiquidity.d8,
+        meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
+        meteora_damm.instructions.initializePermissionedPool.d8,
+        meteora_damm.instructions.initializePermissionlessPool.d8,
+        meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
+        meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8,
+        meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8,
+        meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8,
+      ].includes(d8);
+    }
+
+    return false;
+  }
+
+  /**
+   * Save pool metadata to SQLite database
+   */
+  private savePoolMetadata(blocks: any[]) {
+    if (!this.poolRepository) return;
+
+    try {
+      // Begin transaction for better performance
+      this.poolRepository.beginTransaction();
+
+      // Process each block
+      for (const block of blocks) {
+        const { instructions } = block;
+        if (!instructions) continue;
+
+        // Find initialize events
+        for (const instruction of instructions) {
+          const handler = SolanaLiquidityStream.handlerRegistry[instruction.programId];
+          if (!handler) continue;
+
+          // Only process initialize events
+          if (this.isInitializePoolInstruction(instruction)) {
+            const event = handler.handleInstruction(instruction, block, '');
+
+            // Only process initialize events and ensure it's an InitializeLiquidity event
+            if (event.eventType === 'initialize' && 'tokenAMint' in event) {
+              const initEvent = event as InitializeLiquidity;
+              const protocolValue = initEvent.protocol === 'raydium' ? 1 : 2;
+              const poolTypeValue = initEvent.poolType === 'amm' ? 1 : 2;
+
+              this.poolRepository.savePool({
+                lp_mint: initEvent.lpMint,
+                token_a: initEvent.tokenAMint,
+                token_b: initEvent.tokenBMint,
+                protocol: protocolValue,
+                pool_type: poolTypeValue,
+                block_number: block.header.number,
+              });
+            }
+          }
+        }
+      }
+
+      // Commit transaction
+      this.poolRepository.commitTransaction();
+    } catch (error) {
+      // Rollback on error
+      if (this.poolRepository) {
+        this.poolRepository.rollbackTransaction();
+      }
+      this.logger.error(`Error saving pool metadata: ${error}`);
+    }
+  }
+
+  /**
+   * Close database connection when no longer needed
+   */
+  closeDatabase() {
+    if (this.poolRepository) {
+      this.poolRepository.close();
+    }
   }
 }
