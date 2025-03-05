@@ -3,14 +3,14 @@ import {
   FACTORY_DEPLOYED_AT,
   UniswapPoolStream,
 } from '../../streams/uniswap_pools/uniswap_pool_stream';
-import { ClassicLevel } from 'classic-level';
-import { LevelDbState } from '../../core/states/leveldb_state';
 import { HttpClient } from '@subsquid/http-client';
+import { SqliteState } from '../../core/states/sqlite_state';
+import { DatabaseSync } from 'node:sqlite';
 
 async function main() {
   const logger = createLogger('uniswap_pools');
 
-  const db = new ClassicLevel('./db', {valueEncoding: 'json'});
+  const db = new DatabaseSync('./uniswap-pools.db');
 
   const ds = new UniswapPoolStream({
     portal: {
@@ -23,7 +23,7 @@ async function main() {
       fromBlock: FACTORY_DEPLOYED_AT,
     },
     logger,
-    state: new LevelDbState(db, {id: 'uniswap_pools'}),
+    state: new SqliteState(db, {table: 'uniswap_sync_status', id: 'uniswap_pools'}),
     onStart: async ({current, initial}) => {
       if (initial.number === current.number) {
         logger.info(`Syncing from ${formatNumber(current.number)}`);
@@ -40,15 +40,18 @@ async function main() {
     },
   });
 
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS uniswap_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT)',
+  );
+
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO uniswap_pools (pool, token_a, token_b) VALUES (?, ?, ?)',
+  );
+
   for await (const pools of await ds.stream()) {
-    await db.batch<string, any>(
-      pools.map(({pool, tokenA, tokenB}) => ({
-        type: 'put',
-        key: pool,
-        value: {tokenA, tokenB},
-      })),
-      {valueEncoding: 'json'},
-    );
+    for await (const pool of pools) {
+      insert.run(pool.pool, pool.tokenA, pool.tokenB);
+    }
 
     await ds.ack(pools);
   }

@@ -56,7 +56,6 @@ export class UniswapPoolStream extends AbstractStream<
 
       logs: [
         {
-          address: [FACTORY_ADDRESS],
           topic0: [abi.PoolCreated.topic],
           transaction: true,
         },

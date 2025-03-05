@@ -7,7 +7,6 @@ import {
   ensureTables,
   toUnixTime,
 } from '../../solana_dexes/clickhouse';
-import { getSortFunction } from '../../solana_dexes/swaps/util';
 import { ClassicLevel } from 'classic-level';
 import { UniswapSwap, UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
 import { uniq } from 'lodash';
