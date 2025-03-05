@@ -52,11 +52,12 @@ export abstract class AbstractStream<
     this.portal = new PortalClient(
       typeof options.portal === 'string' ? {url: options.portal} : options.portal,
     );
+
     const headCall = new Throttler(() => this.portal.getHead(), 60_000);
     this.getLatestOffset = async () => {
       const latest = await headCall.get();
 
-      return {number: latest || 0} as DecodedOffset;
+      return {number: latest?.number || 0} as DecodedOffset;
     };
   }
 
