@@ -141,7 +141,7 @@ export class MeteoraAmmHandler extends BaseHandler {
   }
 
   // TODO: Should understand if removing liquidity from single side has the same effect on the underlying liquidity as a swap
-  // or somehow the liquidity it maintains the constant product
+  // or somehow the liquidity maintains the constant product
   handleRemoveLiquiditySingleSide(
     instruction: Instruction,
     block: Block,
