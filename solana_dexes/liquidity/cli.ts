@@ -17,7 +17,8 @@ async function main() {
   const ds = new SolanaLiquidityStream({
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     args: {
-      fromBlock: 240_000_000,
+      fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 240_000_000,
+      toBlock: process.env.TO_BLOCK ? parseInt(process.env.TO_BLOCK) : undefined,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
