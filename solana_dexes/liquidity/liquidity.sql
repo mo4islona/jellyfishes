@@ -2,7 +2,6 @@
 -- Only tracking constant product formula pools from Meteora (DAMM) and Raydium (AMM)
 -- Not tracking dynamic liquidity pools like Meteora DLMM or Raydium CLMM
 
--- This table is created in swaps.sql
 CREATE TABLE IF NOT EXISTS solana_pools
 (
     lp_mint               String,
@@ -14,7 +13,6 @@ CREATE TABLE IF NOT EXISTS solana_pools
     sign                  Int8
 ) ENGINE = CollapsingMergeTree(sign) ORDER BY (lp_mint, token_a, token_b, protocol, pool_type);
 
--- This table is created in swaps.sql
 CREATE TABLE IF NOT EXISTS solana_liquidity_transactions
 (
     event_type        Enum8('add' = 1, 'remove' = 2, 'initialize' = 3),
