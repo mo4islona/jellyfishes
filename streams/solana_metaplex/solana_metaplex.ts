@@ -34,7 +34,7 @@ export class SolanaTokenMetadataStream extends AbstractStream<
 
     const offset = await this.getState({number: args.fromBlock, hash: ''});
 
-    const source = this.portal.getFinalizedStream({
+    const source = this.portal.getStream({
       type: 'solana',
       fromBlock: offset.number,
       toBlock: args.toBlock,

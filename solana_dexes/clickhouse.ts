@@ -71,6 +71,7 @@ export async function cleanAllBeforeOffset(
 
   await Promise.all(
     tables.map(async (table) => {
+      // FIXME Can cause OOM
       const res = await clickhouse.query({
         query: `SELECT *
                 FROM ${table} FINAL

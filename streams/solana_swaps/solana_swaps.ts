@@ -41,10 +41,6 @@ export type SolanaSwap = {
 
 export type SolanaSwapTransfer = Pick<SolanaSwap, 'input' | 'output' | 'account' | 'type'>;
 
-function isProgramInstruction(ins: any, programId: string, d8: string) {
-  return ins.programId === programId && getInstructionDescriptor(ins) === d8;
-}
-
 export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
 }
@@ -72,7 +68,7 @@ export class SolanaSwapsStream extends AbstractStream<
       'raydium_amm',
     ];
 
-    const source = this.portal.getFinalizedStream({
+    const source = this.portal.getStream({
       type: 'solana',
       fromBlock: offset.number,
       toBlock: args.toBlock,
