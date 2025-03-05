@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw
 (
     timestamp           DateTime CODEC (DoubleDelta, ZSTD),
-    dex                 LowCardinality(String),
+    factory_address     LowCardinality(String),
+    network             LowCardinality(String),
     token_a             String,
     token_b             String,
-    a_to_b              Bool,
     amount_a            Float64,
     amount_b            Float64,
     account             String,

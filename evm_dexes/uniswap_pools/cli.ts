@@ -1,29 +1,35 @@
 import { createLogger, formatNumber } from '../../examples/utils';
-import {
-  FACTORY_DEPLOYED_AT,
-  UniswapPoolStream,
-} from '../../streams/uniswap_pools/uniswap_pool_stream';
+import { UniswapPoolStream } from '../../streams/uniswap_pools/uniswap_pool_stream';
 import { HttpClient } from '@subsquid/http-client';
 import { SqliteState } from '../../core/states/sqlite_state';
 import { DatabaseSync } from 'node:sqlite';
+import { getConfig } from '../config';
+
+const config = getConfig();
 
 async function main() {
-  const logger = createLogger('uniswap_pools');
+  const logger = createLogger(`uniswap.v3 pools`).child({network: config.network});
 
-  const db = new DatabaseSync('./uniswap-pools.db');
+  const db = new DatabaseSync(config.dbPath);
+  db.exec('PRAGMA journal_mode = WAL');
+
+  logger.info(`Local database: ${config.dbPath}`);
 
   const ds = new UniswapPoolStream({
     portal: {
-      url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+      url: config.portal.url,
       http: new HttpClient({
         retryAttempts: 10,
       }),
     },
     args: {
-      fromBlock: FACTORY_DEPLOYED_AT,
+      fromBlock: config.factory.block.number,
     },
     logger,
-    state: new SqliteState(db, {table: 'uniswap_sync_status', id: 'uniswap_pools'}),
+    state: new SqliteState(db, {
+      table: 'uniswap_sync_status',
+      network: `pools-${config.network}`,
+    }),
     onStart: async ({current, initial}) => {
       if (initial.number === current.number) {
         logger.info(`Syncing from ${formatNumber(current.number)}`);

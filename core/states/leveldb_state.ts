@@ -2,7 +2,7 @@ import { Offset } from '../abstract_stream';
 import { AbstractState, State } from '../state';
 import { ClassicLevel } from 'classic-level';
 
-type Options = { id: string };
+type Options = { network: string };
 
 export class LevelDbState extends AbstractState implements State {
   options: Required<Options>;
@@ -15,14 +15,14 @@ export class LevelDbState extends AbstractState implements State {
     super();
 
     this.options = {
-      id: 'stream',
+      network: 'stream',
       ...options,
     };
   }
 
   async saveOffset(offset: Offset) {
     await this.client.put(
-      this.options.id,
+      this.options.network,
       {
         initial: this.initial,
         current: offset,
@@ -33,7 +33,7 @@ export class LevelDbState extends AbstractState implements State {
 
   async getOffset(defaultValue: Offset) {
     try {
-      const {current, initial} = await this.client.get<string, any>(this.options.id, {
+      const {current, initial} = await this.client.get<string, any>(this.options.network, {
         valueEncoding: 'json',
       });
       this.initial = initial;

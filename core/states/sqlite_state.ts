@@ -2,7 +2,7 @@ import { Offset } from '../abstract_stream';
 import { AbstractState, State } from '../state';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
 
-type Options = { id?: string; table: string };
+type Options = { network?: string; table: string };
 
 export class SqliteState extends AbstractState implements State {
   options: Required<Options>;
@@ -15,7 +15,7 @@ export class SqliteState extends AbstractState implements State {
     super();
 
     this.options = {
-      id: 'stream',
+      network: 'stream',
       ...options,
     };
 
@@ -60,17 +60,17 @@ export class SqliteState extends AbstractState implements State {
   }
 
   async saveOffset(offset: Offset) {
-    const res = this.statements.update.run({current: offset, id: this.options.id});
+    const res = this.statements.update.run({current: offset, id: this.options.network});
 
     if (res.changes === 0) {
       throw new Error(
-        `Failed to update offset for "${this.options.id}" in table "${this.options.table}"`,
+        `Failed to update offset for "${this.options.network}" in table "${this.options.table}"`,
       );
     }
   }
 
   async getOffset(defaultValue: Offset) {
-    const row = this.statements.select.get({id: this.options.id}) as
+    const row = this.statements.select.get({id: this.options.network}) as
       | { initial: string; current: string }
       | undefined;
 
@@ -78,7 +78,7 @@ export class SqliteState extends AbstractState implements State {
 
     this.statements.insert.run({
       current: defaultValue,
-      id: this.options.id,
+      id: this.options.network,
       initial: defaultValue,
     });
 

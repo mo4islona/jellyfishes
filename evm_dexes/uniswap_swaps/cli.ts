@@ -11,18 +11,32 @@ import { UniswapSwap, UniswapSwapStream } from '../../streams/uniswap_swaps/unis
 import { uniq } from 'lodash';
 import * as process from 'node:process';
 import { DatabaseSync } from 'node:sqlite';
+import { getConfig } from '../config';
 
 function denominate(amount: bigint) {
   return Number(amount) / 10 ** 18;
 }
 
-const db = new DatabaseSync('./uniswap-pools.db', {readOnly: true});
+const config = getConfig();
+
+const db = new DatabaseSync(config.dbPath, {readOnly: true});
+db.exec('PRAGMA journal_mode = WAL');
 
 const clickhouse = createClickhouseClient();
-const logger = createLogger('unswap_swaps');
+const logger = createLogger('unswap.v3 swaps').child({network: config.network});
 
-const POOLS = {
-  '0x1f98431c8ad98523631ae4a59f267346ea31f984': 'uniswap_v3',
+logger.info(`Local database: ${config.dbPath}`);
+
+const KNOWN_POOLS = {
+  // '0x1f98431c8ad98523631ae4a59f267346ea31f984': 'uniswap_v3',
+};
+
+/**
+ * TODO what is what? should we just remove it from stream?
+ */
+const BLACK_LIST_POOLS = {
+  '0x01113a97c0273f3c7a96d304d9a034992ddf0d96': 'unknown_contract',
+  // '0xb921c4e861acd32397d603608ba30cd81637ee22': 'uniswap_v3',
 };
 
 type PoolMetadata = { pool: string; token_a: string; token_b: string; factory_address: string };
@@ -50,14 +64,14 @@ function getPoolMetadata(swaps: UniswapSwap[]): Record<string, PoolMetadata> {
 
 async function main() {
   const ds = new UniswapSwapStream({
-    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+    portal: config.portal.url,
     args: {
-      fromBlock: 12369621,
+      fromBlock: config.factory.block.number,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
-      id: 'uniswap_swaps',
+      id: `swaps-${config.network}`,
     }),
     onStart: async ({current, initial}) => {
       /**
@@ -93,9 +107,10 @@ async function main() {
     await clickhouse.insert({
       table: 'uniswap_v3_swaps_raw',
       values: swaps
-        // .filter((s) => s.amount0 > 0 && s.amount1 > 0)
-        .map((s, index) => {
+        .filter((s) => !BLACK_LIST_POOLS[s.pool])
+        .map((s) => {
           const pool = pools[s.pool];
+
           if (!pool) {
             // TODO improve message, maybe we have to wait until metadata is ready?
             logger.error(`There is no metadata for a pool ${s.pool}`);
@@ -103,7 +118,8 @@ async function main() {
           }
 
           return {
-            dex: POOLS[s.pool] || s.pool,
+            factory_address: pool.factory_address,
+            network: config.network,
             block_number: s.block.number,
             transaction_hash: s.transaction.hash,
             transaction_index: s.transaction.index,
