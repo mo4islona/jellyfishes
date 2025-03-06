@@ -33,6 +33,8 @@ export type StreamOptions<Args extends {}, DecodedOffset extends {}> = {
 
 const logged = new Map();
 
+export type BlockRange = { from: number; to?: number };
+
 export abstract class AbstractStream<
   Args extends {},
   Res extends { offset: Offset },
@@ -60,11 +62,12 @@ export abstract class AbstractStream<
       return {number: latest?.number || 0} as DecodedOffset;
     };
 
-    // Not best design, works for now
-    this.initialize?.();
+    // Not best design, but works for now
+    this.initialize();
   }
 
-  abstract initialize(): void;
+  initialize() {
+  }
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 
@@ -147,5 +150,28 @@ export abstract class AbstractStream<
 
   decodeOffset(offset: Offset): DecodedOffset {
     return JSON.parse(offset);
+  }
+
+  // FIXME types
+  getStream(req: any) {
+    const source = this.portal.getStream(req);
+
+    return source.pipeThrough(
+      new TransformStream({
+        transform: (data, controller) => {
+          controller.enqueue(data);
+
+          if (source[PortalClient.completed]) {
+            this.stop();
+          }
+        },
+      }),
+    );
+  }
+
+  stop() {
+    this.progress?.stop();
+
+    this.logger.info(`Stream stopped`);
   }
 }

@@ -24,6 +24,8 @@ export class TrackProgress<DecodedOffset extends { number: number } = any> {
   current: { offset: DecodedOffset; ts: number };
   interval?: NodeJS.Timeout;
 
+  stopped = false;
+
   constructor(private options: TrackProgressOptions<DecodedOffset>) {
     if (options.initial) {
       this.initial = {offset: options.initial, ts: Date.now()};
@@ -36,7 +38,7 @@ export class TrackProgress<DecodedOffset extends { number: number } = any> {
     }
     this.current = {offset, ts: Date.now()};
 
-    if (this.interval) return;
+    if (this.interval || this.stopped) return;
 
     const {intervalSeconds = 5, onProgress} = this.options;
 
@@ -68,5 +70,10 @@ export class TrackProgress<DecodedOffset extends { number: number } = any> {
 
       this.last = this.current;
     }, intervalSeconds * 1000);
+  }
+
+  stop() {
+    this.stopped = true;
+    clearInterval(this.interval);
   }
 }

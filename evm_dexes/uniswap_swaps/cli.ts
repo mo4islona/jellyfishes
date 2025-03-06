@@ -38,7 +38,9 @@ async function main() {
   const ds = new UniswapSwapStream({
     portal: config.portal.url,
     args: {
-      fromBlock: config.factory.block.number,
+      block: {
+        from: config.factory.block.number,
+      },
       factoryContract: config.factory.address,
       /**
        * Pool metadata is stored in a local SQLite database.
@@ -96,7 +98,7 @@ async function main() {
           transaction_hash: s.transaction.hash,
           transaction_index: s.transaction.index,
           log_index: s.transaction.logIndex,
-          account: s.sender,
+          account: s.account,
           token_a: s.tokenA.address,
           token_b: s.tokenB.address,
           amount_a: denominate(config.network, s.tokenA.address || '', s.tokenA.amount).toString(),

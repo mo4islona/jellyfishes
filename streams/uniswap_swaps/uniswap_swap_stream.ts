@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
+import { AbstractStream, BlockRange, BlockRef, Offset } from '../../core/abstract_stream';
 import { events as swapsEvents } from './swaps';
 import { events as factoryEvents } from './factory';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
@@ -7,16 +7,16 @@ import { uniq } from 'lodash';
 type PoolMetadata = { pool: string; token_a: string; token_b: string; factory_address: string };
 
 export type UniswapSwap = {
-  sender: string;
-  recipient: string;
-
+  account: string;
   tokenA: {
     amount: bigint;
     address?: string;
+    sender: string;
   };
   tokenB: {
     amount: bigint;
     address?: string;
+    recipient: string;
   };
   pool: {
     address: string;
@@ -38,9 +38,9 @@ export type UniswapSwap = {
 };
 
 type Args = {
-  fromBlock: number;
+  block: BlockRange;
   factoryContract?: string;
-  dbPath: string;
+  dbPath?: string;
 };
 
 export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
@@ -48,6 +48,8 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   statements: Record<string, StatementSync>;
 
   initialize() {
+    if (!this.options.args.dbPath) return;
+
     this.db = new DatabaseSync(this.options.args.dbPath);
     // this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec(
@@ -63,11 +65,12 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   async stream(): Promise<ReadableStream<UniswapSwap[]>> {
     const {args} = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
+    const offset = await this.getState({number: args.block.from, hash: ''});
 
-    const source = this.portal.getStream({
+    const source = this.getStream({
       type: 'evm',
       fromBlock: offset.number,
+      toBlock: args.block.to,
       fields: {
         block: {
           number: true,
@@ -95,6 +98,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
         },
         {
           topic0: [swapsEvents.Swap.topic],
+          transaction: true,
         },
       ],
     });
@@ -118,23 +122,24 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
               const metadata = this.getPoolMetadata(logs);
 
               return logs.map((l): UniswapSwap | null => {
-                const poolMetadata = metadata[l.address];
+                const transaction = block.transactions.find((t) => t.hash === l.transactionHash);
 
-                if (!poolMetadata) return null;
+                const poolMetadata = metadata[l.address];
+                if (this.options.args.dbPath && !poolMetadata) return null;
 
                 const data = swapsEvents.Swap.decode(l);
 
                 return {
-                  sender: data.sender,
-                  recipient: data.recipient,
-
+                  account: transaction.from,
                   tokenA: {
                     address: poolMetadata?.token_a,
                     amount: data.amount0,
+                    sender: data.sender,
                   },
                   tokenB: {
                     address: poolMetadata?.token_b,
                     amount: data.amount1,
+                    recipient: data.recipient,
                   },
                   factory: {
                     address: poolMetadata?.factory_address,
@@ -169,6 +174,8 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   }
 
   savePoolMetadata(blocks: any[]) {
+    if (!this.options.args.dbPath) return;
+
     const pools = blocks.flatMap((block: any) => {
       if (!block.logs) return [];
 
@@ -188,8 +195,6 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
 
     if (!pools.length) return;
 
-    // this.logger.debug(`saving ${pools.length} pools`);
-
     // FIXME batch?
     for (const pool of pools) {
       this.statements.insert.run(pool);
@@ -197,6 +202,8 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   }
 
   getPoolMetadata(logs: { address: string }[]): Record<string, PoolMetadata> {
+    if (!this.options.args.dbPath) return {};
+
     const pools = uniq(logs.map((l) => l.address));
     if (!pools.length) return {};
 
