@@ -65,7 +65,12 @@ export function toUnixTime(time: Date | string | number): number {
 
 export async function cleanAllBeforeOffset(
   {clickhouse, logger}: { clickhouse: ClickHouseClient; logger: Logger },
-  {table, offset, column}: { table: string | string[]; offset: number; column: string },
+  {
+    table,
+    offset,
+    column,
+    filter,
+  }: { table: string | string[]; offset: number; column: string; filter?: string },
 ) {
   const tables = typeof table === 'string' ? [table] : table;
 
@@ -75,7 +80,7 @@ export async function cleanAllBeforeOffset(
       const res = await clickhouse.query({
         query: `SELECT *
                 FROM ${table} FINAL
-                WHERE ${column} >= {current_offset:UInt32}`,
+                WHERE ${column} >= {current_offset:UInt32} ${filter ? `AND ${filter}` : ''}`,
         format: 'JSONEachRow',
         query_params: {current_offset: offset},
       });

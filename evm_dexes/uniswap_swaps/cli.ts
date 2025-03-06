@@ -42,7 +42,12 @@ async function main() {
        */
       await cleanAllBeforeOffset(
         {clickhouse, logger},
-        {table: 'uniswap_v3_swaps_raw', column: 'block_number', offset: current.number},
+        {
+          table: 'uniswap_v3_swaps_raw',
+          column: 'block_number',
+          offset: current.number,
+          filter: `network = '${config.network}'`,
+        },
       );
 
       if (initial.number === current.number) {

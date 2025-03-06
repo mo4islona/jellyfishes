@@ -13,7 +13,7 @@ const table = (table: string) => `
 ORDER BY (id)
 `;
 
-type Options = { database?: string; table: string; network?: string };
+type Options = { database?: string; table: string; id?: string };
 
 export class ClickhouseState extends AbstractState implements State {
   options: Required<Options>;
@@ -23,13 +23,13 @@ export class ClickhouseState extends AbstractState implements State {
 
   constructor(
     private client: NodeClickHouseClient,
-    options: { database?: string; table: string; id?: string },
+    options: Options,
   ) {
     super();
 
     this.options = {
       database: 'default',
-      network: 'stream',
+      id: 'stream',
       ...options,
     };
 
@@ -41,7 +41,7 @@ export class ClickhouseState extends AbstractState implements State {
       table: this.options.table,
       values: [
         {
-          id: this.options.network,
+          id: this.options.id,
           initial: this.initial,
           offset: offset,
         },
@@ -58,7 +58,7 @@ export class ClickhouseState extends AbstractState implements State {
                 WHERE id = {id:String}
                 LIMIT 1`,
         format: 'JSONEachRow',
-        query_params: {id: this.options.network},
+        query_params: {id: this.options.id},
       });
 
       const [row] = await res.json<{ initial: string; offset: string }>();
