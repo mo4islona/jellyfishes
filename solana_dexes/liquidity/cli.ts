@@ -68,8 +68,8 @@ async function main() {
         values: bootstrapLiquidityEvents.map((liquidityEvent) => {
           return {
             pool_id: liquidityEvent.lpMint,
-            token_a: liquidityEvent.tokenAMint,
-            token_b: liquidityEvent.tokenBMint,
+            token_a: liquidityEvent.tokenA,
+            token_b: liquidityEvent.tokenB,
             protocol: liquidityEvent.protocol,
             pool_type: liquidityEvent.poolType,
             block_number: liquidityEvent.blockNumber,

@@ -4,7 +4,7 @@
 
 export const CREATE_POOLS_TABLE = `
   CREATE TABLE IF NOT EXISTS solana_pools (
-    lp_mint TEXT,
+    lp_mint TEXT PRIMARY KEY,
     token_a TEXT,
     token_b TEXT,
     protocol INTEGER,  -- 1 for raydium, 2 for meteora

@@ -10,10 +10,10 @@ import {
 } from '../../solana_swaps/utils';
 import { AddLiquidity, RemoveLiquidity, InitializeLiquidity } from './base_handler';
 import { Offset } from 'core/abstract_stream';
-
+import { PoolRepository } from '../repository/pool_repository';
 export class RaydiumAmmHandler extends BaseHandler {
-  constructor() {
-    super('raydium', 'amm');
+  constructor(poolRepository: PoolRepository) {
+    super('raydium', 'amm', poolRepository);
   }
 
   handleInstruction(instruction: Instruction, block: Block, offset: Offset) {
@@ -57,6 +57,8 @@ export class RaydiumAmmHandler extends BaseHandler {
       })
       .map((transfer) => transfer.amount);
 
+    const tokens = this.poolRepository.getTokens(lpMintAddress);
+
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -64,12 +66,14 @@ export class RaydiumAmmHandler extends BaseHandler {
       lpMint: lpMintAddress,
       tokenAAmount: coinAmount,
       tokenBAmount: pcAmount,
+      tokenA: tokens?.tokenA || '',
+      tokenB: tokens?.tokenB || '',
+      blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
       sender: this.getSender(instruction, block),
       timestamp: new Date(block.header.timestamp * 1000),
-      blockNumber: block.header.number,
       offset,
     };
   }
@@ -95,6 +99,16 @@ export class RaydiumAmmHandler extends BaseHandler {
       })
       .map((transfer) => transfer.amount);
 
+    const pool = this.poolRepository.getPool(lpMintAddress);
+    let tokenA = '';
+    let tokenB = '';
+    if (pool) {
+      tokenA = pool.token_a;
+      tokenB = pool.token_b;
+    } else {
+      console.warn(`Pool not found for mint: ${lpMintAddress}`);
+    }
+
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -102,6 +116,8 @@ export class RaydiumAmmHandler extends BaseHandler {
       lpMint: lpMintAddress,
       tokenAAmount: coinAmount,
       tokenBAmount: pcAmount,
+      tokenA,
+      tokenB,
       blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
@@ -125,14 +141,14 @@ export class RaydiumAmmHandler extends BaseHandler {
     } = initialize2Instruction;
 
     return {
-      poolType: this.poolType,
       protocol: this.protocol,
+      poolType: this.poolType,
       eventType: 'initialize',
-      tokenAMint: coinMint,
       lpMint,
-      tokenBMint: pcMint,
-      tokenBReservesAccount: poolPcTokenAccount,
+      tokenA: coinMint,
+      tokenB: pcMint,
       tokenAReservesAccount: poolCoinTokenAccount,
+      tokenBReservesAccount: poolPcTokenAccount,
       tokenAAmount: initCoinAmount,
       tokenBAmount: initPcAmount,
       initTimestamp: openTime,

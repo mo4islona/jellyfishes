@@ -25,34 +25,18 @@ export class PoolRepository {
   private statements: Record<string, StatementSync> = {};
   private logger: Logger;
 
-  /**
-   * Create a new PoolRepository
-   *
-   * @param dbPath Path to SQLite database file
-   * @param logger Logger instance
-   */
   constructor(dbPath: string, logger: Logger) {
     this.logger = logger;
 
-    // Ensure directory exists
     const dbDir = path.dirname(dbPath);
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-
-    // Initialize database connection
     this.db = new DatabaseSync(dbPath);
-
-    // Create tables
     this.initializeDatabase();
-
-    // Prepare statements
     this.prepareStatements();
   }
 
-  /**
-   * Initialize database schema
-   */
   private initializeDatabase(): void {
     try {
       this.db.exec(CREATE_POOLS_TABLE);
@@ -62,9 +46,6 @@ export class PoolRepository {
     }
   }
 
-  /**
-   * Prepare SQL statements
-   */
   private prepareStatements(): void {
     try {
       this.statements = {
@@ -76,12 +57,6 @@ export class PoolRepository {
     }
   }
 
-  /**
-   * Insert or update pool
-   *
-   * @param pool Pool metadata
-   * @returns True if successful, false otherwise
-   */
   savePool(pool: Omit<PoolMetadata, 'sign'> & { sign?: number }): boolean {
     try {
       this.statements.insertPool.run({
@@ -100,30 +75,34 @@ export class PoolRepository {
     }
   }
 
-  /**
-   * Begin a transaction
-   */
+  getPool(mint: string): PoolMetadata | null {
+    const result = this.db.prepare('SELECT * FROM solana_pools WHERE lp_mint = ?').get(mint);
+    return result ? (result as PoolMetadata) : null;
+  }
+
+  getTokens(lpMint: string): { tokenA: string; tokenB: string } | null {
+    const pool = this.getPool(lpMint);
+    if (!pool) {
+      return null;
+    }
+    return {
+      tokenA: pool.token_a,
+      tokenB: pool.token_b,
+    };
+  }
+
   beginTransaction(): void {
     this.db.exec('BEGIN TRANSACTION');
   }
 
-  /**
-   * Commit a transaction
-   */
   commitTransaction(): void {
     this.db.exec('COMMIT');
   }
 
-  /**
-   * Rollback a transaction
-   */
   rollbackTransaction(): void {
     this.db.exec('ROLLBACK');
   }
 
-  /**
-   * Close the database connection
-   */
   close(): void {
     if (this.db) {
       this.db.close();

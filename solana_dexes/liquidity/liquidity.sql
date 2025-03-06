@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS solana_liquidity_transactions
     pool_type         Enum8('amm' = 1, 'clmm' = 2),
     lp_mint           String,
     timestamp         DateTime CODEC (DoubleDelta, ZSTD),
+    token_a           String,
+    token_b           String,
     amount_token_a    Float64,
     amount_token_b    Float64,
     sender            String,

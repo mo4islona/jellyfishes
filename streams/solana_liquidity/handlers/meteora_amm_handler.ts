@@ -13,10 +13,11 @@ import * as tokenProgram from '../../solana_swaps/abi/tokenProgram';
 import * as systemProgram from '../../solana_swaps/abi/system';
 
 import { getInstructionDescriptor } from '@subsquid/solana-stream';
+import { PoolRepository } from '../repository/pool_repository';
 
 export class MeteoraAmmHandler extends BaseHandler {
-  constructor() {
-    super('meteora', 'amm');
+  constructor(poolRepository: PoolRepository) {
+    super('meteora', 'amm', poolRepository);
   }
 
   handleInstruction(instruction: Instruction, block: Block, offset: Offset) {
@@ -82,6 +83,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       .sort((a, b) => (a.destination === aTokenVault ? -1 : b.destination === aTokenVault ? 1 : 0))
       .map((transfer) => transfer.amount);
 
+    const tokens = this.poolRepository.getTokens(lpMint);
+
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -96,6 +99,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: user,
       offset,
+      tokenA: tokens?.tokenA || '',
+      tokenB: tokens?.tokenB || '',
     };
   }
 
@@ -123,6 +128,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       })
       .map((transfer) => transfer.amount);
 
+    const tokens = this.poolRepository.getTokens(lpMint);
+
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -137,6 +144,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: user,
       offset,
+      tokenA: tokens?.tokenA || '',
+      tokenB: tokens?.tokenB || '',
     };
   }
 
@@ -174,6 +183,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       tokenBAmount = tokenTransfer.isTokenA ? 0n : tokenTransfer.amount;
     }
 
+    const tokens = this.poolRepository.getTokens(lpMint);
+
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -188,6 +199,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: user,
       offset,
+      tokenA: tokens?.tokenA || '',
+      tokenB: tokens?.tokenB || '',
     };
   }
 
@@ -217,8 +230,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       poolType: this.poolType,
       eventType: 'initialize',
       lpMint,
-      tokenAMint,
-      tokenBMint,
+      tokenA: tokenAMint,
+      tokenB: tokenBMint,
       tokenAReservesAccount,
       tokenBReservesAccount,
       tokenAAmount,

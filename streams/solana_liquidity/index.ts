@@ -9,8 +9,9 @@ import {
   Protocol,
   InitializeLiquidity,
 } from './handlers';
-import { PoolRepository } from './repository';
-import { Instruction } from '../solana_swaps/utils';
+import { PoolRepository } from './repository/pool_repository';
+import { getInstructionD1, Instruction } from '../solana_swaps/utils';
+import { getInstructionDescriptor } from '@subsquid/solana-stream';
 
 interface InstructionFilter {
   programId: string[];
@@ -93,10 +94,7 @@ export class SolanaLiquidityStream extends AbstractStream<
   LiquidityEvent,
   { number: number; hash: string }
 > {
-  private static readonly handlerRegistry: Record<string, BaseHandler> = {
-    [raydium_amm.programId]: new RaydiumAmmHandler(),
-    [meteora_damm.programId]: new MeteoraAmmHandler(),
-  };
+  private handlerRegistry: Record<string, BaseHandler>;
 
   private poolRepository?: PoolRepository;
 
@@ -106,6 +104,11 @@ export class SolanaLiquidityStream extends AbstractStream<
     // Initialize pool repository if dbPath is provided
     if (args.dbPath) {
       this.poolRepository = new PoolRepository(args.dbPath, this.logger);
+
+      this.handlerRegistry = {
+        [raydium_amm.programId]: new RaydiumAmmHandler(this.poolRepository),
+        [meteora_damm.programId]: new MeteoraAmmHandler(this.poolRepository),
+      };
     }
   }
 
@@ -123,7 +126,6 @@ export class SolanaLiquidityStream extends AbstractStream<
     return source.pipeThrough(
       new TransformStream({
         transform: ({ blocks }, controller) => {
-          // Save pool metadata for initialize events
           if (this.poolRepository) {
             this.savePoolMetadata(blocks);
           }
@@ -139,7 +141,7 @@ export class SolanaLiquidityStream extends AbstractStream<
             if (!instructions) return;
 
             for (const instruction of block.instructions) {
-              const handler = SolanaLiquidityStream.handlerRegistry[instruction.programId];
+              const handler = this.handlerRegistry[instruction.programId];
               if (!handler) continue;
 
               liquidityEvents.push(handler.handleInstruction(instruction, block, offset));
@@ -158,15 +160,14 @@ export class SolanaLiquidityStream extends AbstractStream<
   private isInitializePoolInstruction(instruction: Instruction): boolean {
     // Check Raydium initialize instructions
     if (instruction.programId === raydium_amm.programId) {
-      const d1 = instruction.data?.slice(0, 8)?.toString('hex');
+      const d1 = getInstructionD1(instruction);
       return d1 === raydium_amm.instructions.initialize2.d1;
     }
 
     // Check Meteora initialize instructions
     if (instruction.programId === meteora_damm.programId) {
-      const d8 = instruction.data?.slice(0, 8)?.toString('hex');
+      const d8 = getInstructionDescriptor(instruction);
       return [
-        meteora_damm.instructions.bootstrapLiquidity.d8,
         meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
         meteora_damm.instructions.initializePermissionedPool.d8,
         meteora_damm.instructions.initializePermissionlessPool.d8,
@@ -197,12 +198,12 @@ export class SolanaLiquidityStream extends AbstractStream<
 
         // Find initialize events
         for (const instruction of instructions) {
-          const handler = SolanaLiquidityStream.handlerRegistry[instruction.programId];
+          const handler = this.handlerRegistry[instruction.programId];
           if (!handler) continue;
 
           // Only process initialize events
           if (this.isInitializePoolInstruction(instruction)) {
-            const event = handler.handleInstruction(instruction, block, '');
+            const event = handler.handleInitializePool(instruction, block, '');
 
             // Only process initialize events and ensure it's an InitializeLiquidity event
             if (event.eventType === 'initialize' && 'tokenAMint' in event) {
@@ -212,8 +213,8 @@ export class SolanaLiquidityStream extends AbstractStream<
 
               this.poolRepository.savePool({
                 lp_mint: initEvent.lpMint,
-                token_a: initEvent.tokenAMint,
-                token_b: initEvent.tokenBMint,
+                token_a: initEvent.tokenA,
+                token_b: initEvent.tokenB,
                 protocol: protocolValue,
                 pool_type: poolTypeValue,
                 block_number: block.header.number,

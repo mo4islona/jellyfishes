@@ -1,5 +1,6 @@
 import { Offset } from '../../../core/abstract_stream';
 import { Instruction, Block } from '../../solana_swaps/utils';
+import { PoolRepository } from '../repository';
 
 export type Protocol = 'meteora' | 'raydium';
 export type PoolType = 'amm' | 'clmm';
@@ -11,6 +12,8 @@ export interface BaseLiquidityEvent {
   poolType: PoolType;
   eventType: EventType;
   blockNumber: number;
+  tokenA: string;
+  tokenB: string;
   tokenAAmount: bigint;
   tokenBAmount: bigint;
   timestamp: Date;
@@ -24,8 +27,6 @@ export interface BaseLiquidityEvent {
 export interface AddLiquidity extends BaseLiquidityEvent {}
 export interface RemoveLiquidity extends BaseLiquidityEvent {}
 export interface InitializeLiquidity extends BaseLiquidityEvent {
-  tokenAMint: string;
-  tokenBMint: string;
   tokenAReservesAccount: string;
   tokenBReservesAccount: string;
   initTimestamp: bigint;
@@ -37,6 +38,7 @@ export abstract class BaseHandler {
   constructor(
     public readonly protocol: Protocol,
     public readonly poolType: PoolType,
+    protected readonly poolRepository: PoolRepository,
   ) {}
 
   abstract handleInstruction(
