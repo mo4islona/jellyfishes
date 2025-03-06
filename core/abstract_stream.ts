@@ -62,7 +62,7 @@ export abstract class AbstractStream<
       return {number: latest?.number || 0} as DecodedOffset;
     };
 
-    // Not best design, but works for now
+    // Not the best design, but works for now
     this.initialize();
   }
 
