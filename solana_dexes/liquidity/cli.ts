@@ -7,15 +7,20 @@ import {
   toUnixTime,
 } from '../../solana_dexes/clickhouse';
 import { ClickhouseState } from '../../core/states/clickhouse_state';
-import { InitializeLiquidity } from '../../streams/solana_liquidity/handlers/base_handler';
 import { SolanaLiquidityStream } from '../../streams/solana_liquidity';
+import { HttpClient } from '@subsquid/http-client';
 
 async function main() {
   const clickhouse = createClickhouseClient();
   const logger = createLogger('solana_liquidity');
 
   const ds = new SolanaLiquidityStream({
-    portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
+    portal: {
+      url: 'https://portal.sqd.dev/datasets/solana-mainnet',
+      http: new HttpClient({
+        retryAttempts: 10,
+      }),
+    },
     args: {
       fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 240_000_000,
       toBlock: process.env.TO_BLOCK ? parseInt(process.env.TO_BLOCK) : undefined,
