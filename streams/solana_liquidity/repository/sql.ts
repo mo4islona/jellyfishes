@@ -10,8 +10,7 @@ export const CREATE_POOLS_TABLE = `
     protocol INTEGER,  -- 1 for raydium, 2 for meteora
     pool_type INTEGER, -- 1 for amm, 2 for clmm
     block_number INTEGER,
-    sign INTEGER,
-    PRIMARY KEY (lp_mint, token_a, token_b, protocol, pool_type)
+    sign INTEGER
   );
 `;
 
