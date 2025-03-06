@@ -31,6 +31,7 @@ export type UniswapSwap = {
   transaction: {
     hash: string;
     index: number;
+    logIndex: number;
   };
   timestamp: Date;
   offset: Offset;
@@ -150,6 +151,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
                   transaction: {
                     hash: l.transactionHash,
                     index: l.transactionIndex,
+                    logIndex: l.logIndex,
                   },
                   timestamp: new Date(block.header.timestamp * 1000),
                   offset,
@@ -186,7 +188,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
 
     if (!pools.length) return;
 
-    this.logger.debug(`saving ${pools.length} pools`);
+    // this.logger.debug(`saving ${pools.length} pools`);
 
     // FIXME batch?
     for (const pool of pools) {

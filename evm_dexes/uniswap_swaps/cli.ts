@@ -10,8 +10,21 @@ import {
 import { UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
 import { getConfig } from '../config';
 
-function denominate(amount: bigint) {
-  return Number(amount) / 10 ** 18;
+const DECIMALS = {
+  'base-mainnet': {
+    ['0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase()]: 6, // USDC
+    ['0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'.toLowerCase()]: 6, // USDT
+  },
+  'ethereum-mainnet': {
+    ['0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase()]: 6, // USDC
+    ['0xdac17f958d2ee523a2206206994597c13d831ec7'.toLowerCase()]: 6, // USDT
+  },
+};
+
+function denominate(network: string, address: string, amount: bigint) {
+  const decimals = address ? DECIMALS[network][address] || 18 : 18;
+
+  return Number(amount) / 10 ** decimals;
 }
 
 const config = getConfig();
@@ -27,6 +40,11 @@ async function main() {
     args: {
       fromBlock: config.factory.block.number,
       factoryContract: config.factory.address,
+      /**
+       * Pool metadata is stored in a local SQLite database.
+       * We need metadata to filter out pools that are not interesting to us
+       * and to expand the pool into a list of tokens within it.
+       */
       dbPath: config.dbPath,
     },
     logger,
@@ -77,11 +95,12 @@ async function main() {
           block_number: s.block.number,
           transaction_hash: s.transaction.hash,
           transaction_index: s.transaction.index,
+          log_index: s.transaction.index,
           account: s.sender,
           token_a: s.tokenA.address,
           token_b: s.tokenB.address,
-          amount_a: denominate(s.tokenA.amount).toString(),
-          amount_b: denominate(s.tokenB.amount).toString(),
+          amount_a: denominate(config.network, s.tokenA.address || '', s.tokenA.amount).toString(),
+          amount_b: denominate(config.network, s.tokenB.address || '', s.tokenB.amount).toString(),
           timestamp: toUnixTime(s.timestamp),
           sign: 1,
         };

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw
     account             String,
     block_number        UInt32,
     transaction_index   UInt16,
+    log_index           UInt16,
     transaction_hash    String,
     sign                Int8
 ) ENGINE = CollapsingMergeTree(sign)
