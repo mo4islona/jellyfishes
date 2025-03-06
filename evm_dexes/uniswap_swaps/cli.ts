@@ -95,7 +95,7 @@ async function main() {
           block_number: s.block.number,
           transaction_hash: s.transaction.hash,
           transaction_index: s.transaction.index,
-          log_index: s.transaction.index,
+          log_index: s.transaction.logIndex,
           account: s.sender,
           token_a: s.tokenA.address,
           token_b: s.tokenB.address,

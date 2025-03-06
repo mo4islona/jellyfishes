@@ -15,4 +15,4 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw
     sign                Int8
 ) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp) -- DATA WILL BE SPLIT BY MONTH
-      ORDER BY (block_number, transaction_index);
+      ORDER BY (block_number, transaction_index, log_index);
