@@ -67,6 +67,7 @@ export class MeteoraAmmHandler extends BaseHandler {
     }
 
     const { lpMint, aTokenVault, user } = decodedInstruction.accounts;
+    const tokens = this.poolRepository.getTokens(lpMint);
 
     const [tokenAAmount, tokenBAmount] = getInnerTransfersByLevel(
       instruction,
@@ -82,8 +83,6 @@ export class MeteoraAmmHandler extends BaseHandler {
       })
       .sort((a, b) => (a.destination === aTokenVault ? -1 : b.destination === aTokenVault ? 1 : 0))
       .map((transfer) => transfer.amount);
-
-    const tokens = this.poolRepository.getTokens(lpMint);
 
     return {
       protocol: this.protocol,
@@ -108,6 +107,7 @@ export class MeteoraAmmHandler extends BaseHandler {
     const {
       accounts: { lpMint, aTokenVault, user },
     } = meteoraDamm.instructions.removeBalanceLiquidity.decode(instruction);
+    const tokens = this.poolRepository.getTokens(lpMint);
 
     const [tokenAAmount, tokenBAmount] = getInnerTransfersByLevel(
       instruction,
@@ -127,8 +127,6 @@ export class MeteoraAmmHandler extends BaseHandler {
         return 0;
       })
       .map((transfer) => transfer.amount);
-
-    const tokens = this.poolRepository.getTokens(lpMint);
 
     return {
       protocol: this.protocol,
@@ -159,6 +157,7 @@ export class MeteoraAmmHandler extends BaseHandler {
     const {
       accounts: { lpMint, aTokenVault, user },
     } = meteoraDamm.instructions.removeLiquiditySingleSide.decode(instruction);
+    const tokens = this.poolRepository.getTokens(lpMint);
 
     // As this function removes liquidity and uses a single token to send the liquidity to the user,
     // we only have one internal token transfer instruction
@@ -182,8 +181,6 @@ export class MeteoraAmmHandler extends BaseHandler {
       tokenAAmount = tokenTransfer.isTokenA ? tokenTransfer.amount : 0n;
       tokenBAmount = tokenTransfer.isTokenA ? 0n : tokenTransfer.amount;
     }
-
-    const tokens = this.poolRepository.getTokens(lpMint);
 
     return {
       protocol: this.protocol,
@@ -209,16 +206,40 @@ export class MeteoraAmmHandler extends BaseHandler {
     block: Block,
     offset: Offset,
   ): InitializeLiquidity {
-    const {
-      accounts: {
-        lpMint,
-        tokenAMint,
-        tokenBMint,
-        aTokenVault: tokenAReservesAccount,
-        bTokenVault: tokenBReservesAccount,
-      },
-      data: { tokenAAmount, tokenBAmount },
-    } = meteoraDamm.instructions.initializePermissionlessPoolWithFeeTier.decode(instruction);
+    const descriptor = getInstructionDescriptor(instruction);
+    
+    // Common structure for both permissioned and permissionless pools
+    let lpMint: string;
+    let tokenAMint: string;
+    let tokenBMint: string;
+    let tokenAReservesAccount: string;
+    let tokenBReservesAccount: string;
+    let tokenAAmount = 0n;
+    let tokenBAmount = 0n;
+
+    // Permissioned pools doesn't initialize the reserves
+    if (descriptor === meteoraDamm.instructions.initializePermissionedPool.d8) {
+      ({
+        accounts: {
+          lpMint,
+          tokenAMint,
+          tokenBMint,
+          aVault: tokenAReservesAccount,
+          bVault: tokenBReservesAccount,
+        },
+      } = meteoraDamm.instructions.initializePermissionedPool.decode(instruction));
+    } else {
+      ({
+        accounts: {
+          lpMint,
+          tokenAMint,
+          tokenBMint,
+          aVault: tokenAReservesAccount,
+          bVault: tokenBReservesAccount,
+        },
+        data: { tokenAAmount, tokenBAmount },
+      } = meteoraDamm.instructions.initializePermissionlessPoolWithFeeTier.decode(instruction));
+    }
 
     const createAccountInstruction = getNextInstruction(instruction, block.instructions);
     const {

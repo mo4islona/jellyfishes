@@ -36,6 +36,7 @@ export class RaydiumAmmHandler extends BaseHandler {
     const {
       accounts: { poolCoinTokenAccount, lpMintAddress },
     } = depositInstruction;
+    const tokens = this.poolRepository.getTokens(lpMintAddress);
 
     const [coinAmount, pcAmount] = getInnerTransfersByLevel(instruction, block.instructions, 1)
       .map((instruction) => {
@@ -56,8 +57,6 @@ export class RaydiumAmmHandler extends BaseHandler {
         return 0;
       })
       .map((transfer) => transfer.amount);
-
-    const tokens = this.poolRepository.getTokens(lpMintAddress);
 
     return {
       protocol: this.protocol,
@@ -83,6 +82,7 @@ export class RaydiumAmmHandler extends BaseHandler {
     const {
       accounts: { poolCoinTokenAccount, lpMintAddress },
     } = withdrawInstruction;
+    const tokens = this.poolRepository.getTokens(lpMintAddress);
 
     const [coinAmount, pcAmount] = getInnerTransfersByLevel(instruction, block.instructions, 1)
       .map((instruction) => {
@@ -99,16 +99,6 @@ export class RaydiumAmmHandler extends BaseHandler {
       })
       .map((transfer) => transfer.amount);
 
-    const pool = this.poolRepository.getPool(lpMintAddress);
-    let tokenA = '';
-    let tokenB = '';
-    if (pool) {
-      tokenA = pool.token_a;
-      tokenB = pool.token_b;
-    } else {
-      console.warn(`Pool not found for mint: ${lpMintAddress}`);
-    }
-
     return {
       protocol: this.protocol,
       poolType: this.poolType,
@@ -116,8 +106,8 @@ export class RaydiumAmmHandler extends BaseHandler {
       lpMint: lpMintAddress,
       tokenAAmount: coinAmount,
       tokenBAmount: pcAmount,
-      tokenA,
-      tokenB,
+      tokenA: tokens?.tokenA || '',
+      tokenB: tokens?.tokenB || '',
       blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
