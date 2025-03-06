@@ -56,29 +56,6 @@ async function main() {
   const stream = await ds.stream();
 
   for await (const liquidityEvents of stream) {
-    const bootstrapLiquidityEvents = liquidityEvents.filter(
-      (liquidityEvent): liquidityEvent is InitializeLiquidity =>
-        liquidityEvent.eventType === 'initialize',
-    );
-
-    if (bootstrapLiquidityEvents.length) {
-      await clickhouse.insert({
-        table: 'solana_pools',
-        format: 'JSONEachRow',
-        values: bootstrapLiquidityEvents.map((liquidityEvent) => {
-          return {
-            pool_id: liquidityEvent.lpMint,
-            token_a: liquidityEvent.tokenA,
-            token_b: liquidityEvent.tokenB,
-            protocol: liquidityEvent.protocol,
-            pool_type: liquidityEvent.poolType,
-            block_number: liquidityEvent.blockNumber,
-            sign: 1,
-          };
-        }),
-      });
-    }
-
     await clickhouse.insert({
       table: 'solana_liquidity_transactions',
       format: 'JSONEachRow',
@@ -89,6 +66,8 @@ async function main() {
           pool_type: liquidityEvent.poolType,
           timestamp: toUnixTime(liquidityEvent.timestamp),
           event_type: liquidityEvent.eventType,
+          token_a: liquidityEvent.tokenA,
+          token_b: liquidityEvent.tokenB,
           amount_token_a: Number(liquidityEvent.tokenAAmount),
           amount_token_b: Number(liquidityEvent.tokenBAmount),
           sender: liquidityEvent.sender,
