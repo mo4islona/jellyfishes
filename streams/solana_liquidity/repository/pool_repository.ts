@@ -4,6 +4,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CREATE_POOLS_TABLE, INSERT_POOL } from './sql';
 
+type RaydiumProtocol = 1;
+type MeteoraProtocol = 2;
+
+type RaydiumPoolType = 1;
+type MeteoraPoolType = 2;
+
+type Protocol = RaydiumProtocol | MeteoraProtocol;
+type PoolType = RaydiumPoolType | MeteoraPoolType;
+
 /**
  * Pool metadata type definition
  */
@@ -11,8 +20,8 @@ export type PoolMetadata = {
   lp_mint: string;
   token_a: string;
   token_b: string;
-  protocol: number; // 1 for raydium, 2 for meteora
-  pool_type: number; // 1 for amm, 2 for clmm
+  protocol: Protocol;
+  pool_type: PoolType;
   block_number: number;
   sign: number;
 };
