@@ -13,7 +13,7 @@ export class TypeormState extends AbstractState implements State<TypeormAckArgs>
 
     this.options = {
       namespace: 'public',
-      network: 'stream',
+      id: 'stream',
       ...options,
     };
   }

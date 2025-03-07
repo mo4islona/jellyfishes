@@ -65,11 +65,9 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   async stream(): Promise<ReadableStream<UniswapSwap[]>> {
     const {args} = this.options;
 
-    const offset = await this.getState({number: args.block.from, hash: ''});
-
-    const source = this.getStream({
+    const source = await this.getStream({
       type: 'evm',
-      fromBlock: offset.number,
+      fromBlock: args.block.from,
       toBlock: args.block.to,
       fields: {
         block: {

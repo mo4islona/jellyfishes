@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS solana_swaps_raw
     amount_a            Float64,
     amount_b            Float64,
     account             String,
-    block_number        UInt32,
+    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
     transaction_index   UInt16,
     instruction_address Array(UInt16),
     transaction_hash    String,

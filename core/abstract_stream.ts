@@ -1,4 +1,10 @@
-import { PortalClient, PortalClientOptions } from '@subsquid/portal-client';
+import {
+  PortalClient,
+  PortalClientOptions,
+  PortalQuery,
+  PortalResponse,
+  PortalStreamData,
+} from '@subsquid/portal-client';
 import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
 import { State } from './state';
@@ -18,7 +24,7 @@ export type TransactionRef = {
 
 export type Offset = string;
 
-export type StreamOptions<Args extends {}, DecodedOffset extends {}> = {
+export type StreamOptions<Args extends {}, DecodedOffset extends { number: number }> = {
   portal: string | PortalClientOptions;
   state?: State;
   logger?: Logger;
@@ -38,7 +44,7 @@ export type BlockRange = { from: number; to?: number };
 export abstract class AbstractStream<
   Args extends {},
   Res extends { offset: Offset },
-  DecodedOffset extends { number: number } = any,
+  DecodedOffset extends { number: number } = { number: number },
 > {
   protected readonly portal: PortalClient;
   logger: Logger;
@@ -55,14 +61,17 @@ export abstract class AbstractStream<
       typeof options.portal === 'string' ? {url: options.portal} : options.portal,
     );
 
+    // Throttle the head call
     const headCall = new Throttler(() => this.portal.getHead(), 60_000);
+
+    // Get the latest offset
     this.getLatestOffset = async () => {
       const latest = await headCall.get();
 
       return {number: latest?.number || 0} as DecodedOffset;
     };
 
-    // Not the best design, but works for now
+    // Probably, not the best design, but it works for now
     this.initialize();
   }
 
@@ -79,27 +88,50 @@ export abstract class AbstractStream<
     logged.set(message, true);
   }
 
-  async ack<T extends any[]>(batch: Res[], ...args: T) {
-    // Get last offset
-    const last = batch[batch.length - 1].offset;
-    // Calculate progress and speed
-    this.progress?.track(this.decodeOffset(last));
+  // FIXME types
+  /**
+   * Fetches the stream of data from the portal.
+   *
+   * This method retrieves a stream of data from the portal based on the provided query.
+   * It resumes streaming from the last saved offset and exits when the stream is completed.
+   *
+   * @param req - The query object containing the parameters for the stream request.
+   * @returns A promise that resolves to a ReadableStream of the portal stream data.
+   */
+  async getStream<Res extends PortalResponse, Query extends PortalQuery>(
+    req: Query,
+  ): Promise<ReadableStream<PortalStreamData<Res>>> {
+    // Get the last offset from the state
+    const offset = await this.getState({number: req.fromBlock} as DecodedOffset);
 
-    if (!this.options.state) {
-      this.warnOnlyOnce(
-        [
-          '====================================',
-          'State is not defined. Please set a state to make a stream resumable',
-          '====================================',
-        ].join('\n'),
-      );
+    // Rewrite the original fromBlock to the last saved offset
+    req.fromBlock = offset.number;
 
-      return;
-    }
-    // Save last offset
-    return this.options.state.saveOffset(last, ...args);
+    const source = this.portal.getStream<Query, Res>(req);
+
+    return source.pipeThrough(
+      new TransformStream({
+        transform: (data, controller) => {
+          controller.enqueue(data);
+
+          // Check if the stream is completed
+          if (source[PortalClient.completed]) {
+            this.stop();
+          }
+        },
+      }),
+    );
   }
 
+  /**
+   * Fetches the current state of the stream.
+   *
+   * This method retrieves the last offset from the state, initializes progress tracking,
+   * and calls the onStart callback with the current and initial offsets.
+   *
+   * @param defaultValue - The default offset value to use if no state is found.
+   * @returns The current offset.
+   */
   async getState(defaultValue: DecodedOffset): Promise<DecodedOffset> {
     // Fetch the last offset from the state
     const state = this.options.state
@@ -144,29 +176,44 @@ export abstract class AbstractStream<
     return current;
   }
 
+  /**
+   * Acknowledge the last offset.
+   *
+   * This method is called to acknowledge the last processed offset in the stream.
+   * It updates the progress tracking and saves the last offset to the state.
+   *
+   * @param batch - The batch of results processed.
+   * @param args - Additional arguments passed to the state saveOffset method.
+   */
+  async ack<T extends any[]>(batch: Res[], ...args: T) {
+    // Get last offset
+    const last = batch[batch.length - 1].offset;
+
+    // Calculate progress and speed
+    this.progress?.track(this.decodeOffset(last));
+
+    if (!this.options.state) {
+      this.warnOnlyOnce(
+        [
+          '====================================',
+          'State is not defined. Please set a state to make a stream resumable',
+          '====================================',
+        ].join('\n'),
+      );
+
+      return;
+    }
+
+    // Save last offset
+    return this.options.state.saveOffset(last, ...args);
+  }
+
   encodeOffset(offset: any): Offset {
     return JSON.stringify(offset);
   }
 
   decodeOffset(offset: Offset): DecodedOffset {
     return JSON.parse(offset);
-  }
-
-  // FIXME types
-  getStream(req: any) {
-    const source = this.portal.getStream(req);
-
-    return source.pipeThrough(
-      new TransformStream({
-        transform: (data, controller) => {
-          controller.enqueue(data);
-
-          if (source[PortalClient.completed]) {
-            this.stop();
-          }
-        },
-      }),
-    );
   }
 
   stop() {
