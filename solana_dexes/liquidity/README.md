@@ -21,7 +21,7 @@ The command-line interface provides the entry point for the liquidity tracking s
 The core stream processor that:
 
 - Tracks liquidity events from Raydium and Meteora protocols
-- Handles different AMM pools for both projects. In the future it will also track concentraded liquidity pools
+- Handles AMM pools for both projects. In the future it will also track concentraded liquidity pools
 - Maintains a local SQLite database for pool metadata
 - Processes three types of events:
   - Pool initialization
