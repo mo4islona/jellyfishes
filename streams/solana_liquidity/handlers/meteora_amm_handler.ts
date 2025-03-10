@@ -133,8 +133,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       poolType: this.poolType,
       eventType: 'remove',
       lpMint,
-      tokenAAmount,
-      tokenBAmount,
+      tokenAAmount: tokenAAmount * -1n,
+      tokenBAmount: tokenBAmount * -1n,
       blockNumber: block.header.number,
       timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),
@@ -175,8 +175,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       },
     );
 
-    let tokenAAmount;
-    let tokenBAmount;
+    let tokenAAmount: bigint | undefined;
+    let tokenBAmount: bigint | undefined;
     if (tokenTransfer) {
       tokenAAmount = tokenTransfer.isTokenA ? tokenTransfer.amount : 0n;
       tokenBAmount = tokenTransfer.isTokenA ? 0n : tokenTransfer.amount;
@@ -187,8 +187,8 @@ export class MeteoraAmmHandler extends BaseHandler {
       poolType: this.poolType,
       eventType: 'remove',
       lpMint,
-      tokenAAmount: tokenAAmount || 0n,
-      tokenBAmount: tokenBAmount || 0n,
+      tokenAAmount: -(tokenAAmount || 0n),
+      tokenBAmount: -(tokenBAmount || 0n),
       blockNumber: block.header.number,
       timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),

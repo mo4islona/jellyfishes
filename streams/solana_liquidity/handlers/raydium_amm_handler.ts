@@ -18,7 +18,6 @@ export class RaydiumAmmHandler extends BaseHandler {
 
   handleInstruction(instruction: Instruction, block: Block, offset: Offset) {
     const descriptor = getInstructionD1(instruction);
-
     switch (descriptor) {
       case raydium_amm.instructions.deposit.d1:
         return this.handleAddLiquidity(instruction, block, offset);
@@ -104,8 +103,8 @@ export class RaydiumAmmHandler extends BaseHandler {
       poolType: this.poolType,
       eventType: 'remove',
       lpMint: lpMintAddress,
-      tokenAAmount: coinAmount,
-      tokenBAmount: pcAmount,
+      tokenAAmount: coinAmount * -1n,
+      tokenBAmount: pcAmount * -1n,
       tokenA: tokens?.tokenA || '',
       tokenB: tokens?.tokenB || '',
       blockNumber: block.header.number,

@@ -17,10 +17,11 @@ CREATE TABLE IF NOT EXISTS solana_liquidity_transactions
     sign              Int8,
 ) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp)
-      ORDER BY (block_number, lp_mint, sender, transaction_index);
+      ORDER BY (block_number, transaction_index, instruction);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS solana_liquidity_daily 
 ENGINE = AggregatingMergeTree() 
+PARTITION BY toYYYYMM(timestamp)
 ORDER BY (timestamp, lp_mint)
 AS
 SELECT 
@@ -30,12 +31,14 @@ SELECT
     token_b,
     protocol,
     pool_type,
-    sumState(amount_token_a * IF(event_type IN ('add', 'initialize'), 1, -1)) AS token_a_liquidity_change,
-    sumState(amount_token_b * IF(event_type IN ('add', 'initialize'), 1, -1)) AS token_b_liquidity_change,
-    countState(IF(event_type = 'add', 1, NULL)) AS adds,
-    countState(IF(event_type = 'remove', 1, NULL)) AS removes,
-    sumState(amount_token_a * IF(event_type IN ('add', 'initialize'), 1, -1)) AS net_liquidity_token_a,
-    sumState(amount_token_b * IF(event_type IN ('add', 'initialize'), 1, -1)) AS net_liquidity_token_b,
+    sumStateIf(amount_token_a * sign, event_type IN ('add', 'initialize')) AS total_liquidity_added_token_a,
+    sumStateIf(amount_token_b * sign, event_type IN ('add', 'initialize')) AS total_liquidity_added_token_b,
+    sumStateIf(amount_token_a * sign, event_type = 'remove') AS total_liquidity_removed_token_a,
+    sumStateIf(amount_token_b * sign, event_type = 'remove') AS total_liquidity_removed_token_b,
+    sumState(amount_token_a * sign) AS net_liquidity_token_a,
+    sumState(amount_token_b * sign) AS net_liquidity_token_b,
+    countStateIf(event_type IN ('add', 'initialize') AND sign = 1) AS adds,
+    countStateIf(event_type = 'remove' AND sign = 1) AS removes,
     uniqState(sender) AS unique_users
 FROM solana_liquidity_transactions
 GROUP BY timestamp, lp_mint, token_a, token_b, protocol, pool_type;
