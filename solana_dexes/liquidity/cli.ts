@@ -41,7 +41,7 @@ async function main() {
       await cleanAllBeforeOffset(
         { clickhouse, logger },
         {
-          table: ['solana_liquidity_transactions', 'solana_pools'],
+          table: ['solana_liquidity_transactions'],
           offset: current.number,
           column: 'block_number',
         },
