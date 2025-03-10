@@ -26,10 +26,18 @@ export function getInnerTransfersByLevel(
     if (inner.transactionIndex !== parent.transactionIndex) return false;
     if (inner.instructionAddress.length !== parent.instructionAddress.length + level) return false;
     if (inner.programId !== tokenProgram.programId) return false;
+    if (getInstructionD1(inner) !== tokenProgram.instructions.transfer.d1) return false;
 
     // All child instructions should have the same prefix as the parent
     return parent.instructionAddress.every((v, i) => v === inner.instructionAddress[i]);
   });
+}
+
+export function getNextInstruction(instruction: Instruction, instructions: Instruction[]) {
+  const index = instructions.findIndex(
+    (i) => i.instructionAddress === instruction.instructionAddress,
+  );
+  return instructions[index + 1];
 }
 
 export function getInstructionD1(instruction: Instruction) {
