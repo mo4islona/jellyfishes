@@ -1,110 +1,36 @@
 import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
+import { DexPool, DexPoolStream } from '../dex_pools/dex_pool_stream';
 import { events as abiAerodrome } from './aerodrome';
 
-export type AerodromePool = {
-  pool: string;
-  factoryAddress: string;
+export type AerodromePoolData =  {
   tokenA: string;
   tokenB: string;
-
-  block: BlockRef;
-  transaction: {
-    hash: string;
-    index: number;
-  };
-
+  pool: string;
   tickSpacing: number;
-
-  timestamp: Date;
-  offset: Offset;
 };
 
-export class AerodromePoolStream extends AbstractStream<
-  {
-    fromBlock: number;
-  },
-  AerodromePool
-> {
-  async stream(): Promise<ReadableStream<AerodromePool[]>> {
-    const { args } = this.options;
-
-    const source = await this.getStream({
-      type: 'evm',
-      fromBlock: args.fromBlock,
-      fields: {
-        block: {
-          number: true,
-          hash: true,
-          timestamp: true,
-        },
-        transaction: {
-          from: true,
-          to: true,
-          hash: true,
-        },
-        log: {
-          address: true,
-          topics: true,
-          data: true,
-          transactionHash: true,
-          logIndex: true,
-          transactionIndex: true,
-        },
+export class AerodromePoolStream extends DexPoolStream<AerodromePoolData, AerodromePoolData & DexPool> {
+  protected getLogFilters(): any[] {
+    return [
+      {
+        topic0: [abiAerodrome.PoolCreated.topic],
+        transaction: true,
       },
+    ];
+  }
 
-      logs: [
-        {
-          topic0: [abiAerodrome.PoolCreated.topic],
-          transaction: true,
-        },
-      ],
-    });
+  protected decodePoolFromEvent(log: any): AerodromePoolData | null {
+    if (abiAerodrome.PoolCreated.is(log)) {
+      const data = abiAerodrome.PoolCreated.decode(log);
 
-    return source.pipeThrough(
-      new TransformStream({
-        transform: ({ blocks }, controller) => {
-          // FIXME
-          const events = blocks.flatMap((block: any) => {
-            if (!block.logs) return [];
+      return {
+        pool: data.pool,
+        tokenA: data.token0,
+        tokenB: data.token1,
+        tickSpacing: data.tickSpacing,
+      };
+    }
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
-
-            const res = block.logs
-              .map((l): AerodromePool | null => {
-                if (abiAerodrome.PoolCreated.is(l)) {
-                  const data = abiAerodrome.PoolCreated.decode(l);
-
-                  return {
-                    pool: data.pool,
-                    block: block.header,
-                    factoryAddress: l.address,
-                    tokenA: data.token0,
-                    tokenB: data.token1,
-                    tickSpacing: data.tickSpacing,
-                    transaction: {
-                      hash: l.transactionHash,
-                      index: l.transactionIndex,
-                    },
-                    timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
-                  };
-                }
-
-                return null;
-              })
-              .filter(Boolean);
-
-            return res;
-          });
-
-          if (!events.length) return;
-
-          controller.enqueue(events);
-        },
-      }),
-    );
+    return null;
   }
 }
