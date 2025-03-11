@@ -26,17 +26,14 @@ export class SolanaTokenMetadataStream extends AbstractStream<
     fromBlock: number;
     toBlock?: number;
   },
-  SolanaTokenMetadata,
-  { number: number; hash: string }
+  SolanaTokenMetadata
 > {
   async stream(): Promise<ReadableStream<SolanaTokenMetadata[]>> {
     const {args} = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -90,6 +87,7 @@ export class SolanaTokenMetadataStream extends AbstractStream<
             const offset = this.encodeOffset({
               number: block.header.number,
               hash: block.header.hash,
+              timestamp: block.header.timestamp,
             });
 
             const metadata: SolanaTokenMetadata[] = [];
