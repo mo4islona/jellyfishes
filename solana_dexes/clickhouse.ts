@@ -72,6 +72,8 @@ export async function cleanAllBeforeOffset(
     filter,
   }: { table: string | string[]; offset: number; column: string; filter?: string },
 ) {
+  if (!offset) return;
+
   const tables = typeof table === 'string' ? [table] : table;
 
   await Promise.all(

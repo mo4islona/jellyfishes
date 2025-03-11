@@ -72,7 +72,12 @@ export abstract class AbstractStream<
     this.getLatestOffset = async () => {
       const latest = await headCall.get();
 
-      return {number: latest?.number || 0} as DecodedOffset;
+      return {
+        number: latest?.number || 0,
+        hash: latest?.hash,
+        // FIXME extract timestamp from the block?
+        timestamp: 0,
+      } as DecodedOffset;
     };
 
     // Probably, not the best design, but it works for now
@@ -221,7 +226,7 @@ export abstract class AbstractStream<
       timestamp: 0,
       number: 0,
       hash: '',
-      ...JSON.parse(offset),
+      ...(JSON.parse(offset) || {}),
     };
   }
 
