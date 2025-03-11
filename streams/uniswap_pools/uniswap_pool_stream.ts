@@ -30,11 +30,9 @@ export class UniswapPoolStream extends AbstractStream<
   async stream(): Promise<ReadableStream<UniswapPool[]>> {
     const {args} = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'evm',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       fields: {
         block: {
           number: true,
