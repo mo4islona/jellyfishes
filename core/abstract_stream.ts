@@ -44,7 +44,11 @@ export type BlockRange = { from: number; to?: number };
 export abstract class AbstractStream<
   Args extends {},
   Res extends { offset: Offset },
-  DecodedOffset extends { number: number } = { number: number },
+  DecodedOffset extends { timestamp: number; number: number; hash: string } = {
+    timestamp: number;
+    number: number;
+    hash: string;
+  },
 > {
   protected readonly portal: PortalClient;
   logger: Logger;
@@ -208,12 +212,17 @@ export abstract class AbstractStream<
     return this.options.state.saveOffset(last, ...args);
   }
 
-  encodeOffset(offset: any): Offset {
+  encodeOffset(offset: DecodedOffset): Offset {
     return JSON.stringify(offset);
   }
 
   decodeOffset(offset: Offset): DecodedOffset {
-    return JSON.parse(offset);
+    return {
+      timestamp: 0,
+      number: 0,
+      hash: '',
+      ...JSON.parse(offset),
+    };
   }
 
   stop() {

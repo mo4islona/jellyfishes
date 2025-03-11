@@ -52,7 +52,7 @@ async function main() {
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
-      id: `swaps-${config.network}`,
+      id: `swaps-${config.network}-v2`,
     }),
     onStart: async ({current, initial}) => {
       /**
@@ -63,9 +63,9 @@ async function main() {
       await cleanAllBeforeOffset(
         {clickhouse, logger},
         {
-          table: 'uniswap_v3_swaps_raw',
-          column: 'block_number',
-          offset: current.number,
+          table: 'uniswap_v3_swaps_raw_v2',
+          column: 'timestamp',
+          offset: current.timestamp,
           filter: `network = '${config.network}'`,
         },
       );
@@ -74,8 +74,9 @@ async function main() {
         logger.info(`Syncing from ${formatNumber(current.number)}`);
         return;
       }
+      const ts = new Date(current.timestamp * 1000);
 
-      logger.info(`Resuming from ${formatNumber(current.number)}`);
+      logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
     },
     onProgress: ({state, interval}) => {
       logger.info({
@@ -89,7 +90,7 @@ async function main() {
 
   for await (const swaps of await ds.stream()) {
     await clickhouse.insert({
-      table: 'uniswap_v3_swaps_raw',
+      table: 'uniswap_v3_swaps_raw_v2',
       values: swaps.map((s) => {
         return {
           factory_address: s.factory.address,

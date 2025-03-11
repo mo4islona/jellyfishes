@@ -113,6 +113,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
 
               const offset = this.encodeOffset({
                 number: block.header.number,
+                timestamp: block.header.timestamp,
                 hash: block.header.hash,
               });
 
