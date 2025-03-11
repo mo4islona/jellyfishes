@@ -28,11 +28,9 @@ export class AerodromePoolStream extends AbstractStream<
   async stream(): Promise<ReadableStream<AerodromePool[]>> {
     const { args } = this.options;
 
-    const offset = await this.getState({ number: args.fromBlock });
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'evm',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       fields: {
         block: {
           number: true,
