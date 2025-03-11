@@ -3,7 +3,7 @@ export const CONTRACTS = {
     'base-mainnet': {
       address: '0x33128a8fc17869897dce68ed026d694621f6fdfd',
       block: {
-        number: 1371680,
+        number: 18112225,
       },
     },
     'ethereum-mainnet': {
