@@ -1,6 +1,5 @@
 import { createLogger, formatNumber } from '../../examples/utils';
 import { UniswapPoolStream } from '../../streams/uniswap_pools/uniswap_pool_stream';
-import { HttpClient } from '@subsquid/http-client';
 import { SqliteState } from '../../core/states/sqlite_state';
 import { DatabaseSync } from 'node:sqlite';
 import { getConfig } from '../config';
@@ -18,9 +17,9 @@ async function main() {
   const ds = new UniswapPoolStream({
     portal: {
       url: config.portal.url,
-      http: new HttpClient({
+      http: {
         retryAttempts: 10,
-      }),
+      },
     },
     args: {
       fromBlock: config.factory.block.number,

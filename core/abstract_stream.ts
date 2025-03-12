@@ -9,7 +9,6 @@ import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
 import { State } from './state';
 import { Progress, TrackProgress } from './track_progress';
-import { HttpClient } from '@subsquid/http-client';
 
 export type Logger = PinoLogger;
 
@@ -66,16 +65,16 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
       typeof options.portal === 'string'
         ? {
           url: options.portal,
-          http: new HttpClient({
+          http: {
             retryAttempts: 10,
-          }),
+          },
         }
         : {
           ...options.portal,
-          http: new HttpClient({
+          http: {
             retryAttempts: 10,
             ...options.portal.http,
-          }),
+          },
         },
     );
 
