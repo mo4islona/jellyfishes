@@ -6,7 +6,6 @@ import { getInstructionDescriptor } from '@subsquid/solana-stream';
 export type PumpfunToken = ReturnType<typeof pumpfun.instructions.create.decode> & {
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -59,12 +58,6 @@ export class SolanaPumpfunTokensStream extends AbstractStream<
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-              timestamp: block.header.timestamp,
-            });
-
             const tokens: PumpfunToken[] = [];
 
             for (const ins of block.instructions) {
@@ -85,7 +78,6 @@ export class SolanaPumpfunTokensStream extends AbstractStream<
                 },
                 block: {number: block.header.number, hash: block.header.hash},
                 timestamp: new Date(block.header.timestamp * 1000),
-                offset,
               });
             }
 

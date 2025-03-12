@@ -1,7 +1,7 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
 import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
-import { Instruction, getTransactionHash } from '../solana_swaps/utils';
+import { getTransactionHash, Instruction } from '../solana_swaps/utils';
 import * as metaplex from './abi/metaplex/index';
 
 export type SolanaTokenMetadata = {
@@ -13,7 +13,6 @@ export type SolanaTokenMetadata = {
   isMutable: boolean;
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -84,12 +83,6 @@ export class SolanaTokenMetadataStream extends AbstractStream<
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-              timestamp: block.header.timestamp,
-            });
-
             const metadata: SolanaTokenMetadata[] = [];
 
             for (const ins of block.instructions) {
@@ -115,7 +108,6 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                     },
                     block: {number: block.header.number, hash: block.header.hash},
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV2.d1: {
@@ -133,7 +125,6 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                     },
                     block: {number: block.header.number, hash: block.header.hash},
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV3.d1: {
@@ -151,7 +142,6 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                     },
                     block: {number: block.header.number, hash: block.header.hash},
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
               }

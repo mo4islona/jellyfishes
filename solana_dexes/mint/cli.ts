@@ -42,7 +42,7 @@ async function main() {
       format: 'JSONEachRow',
     });
 
-    await datasource.ack(mints);
+    await datasource.ack();
   }
 }
 

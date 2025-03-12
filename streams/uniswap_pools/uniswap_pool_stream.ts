@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
+import { AbstractStream, BlockRef } from '../../core/abstract_stream';
 import { events as abiUniswapV3 } from './uniswap';
 import { events as abiAlgebraV1 } from './algebra';
 
@@ -18,7 +18,6 @@ export type UniswapPool = {
   tickSpacing?: number;
 
   timestamp: Date;
-  offset: Offset;
 };
 
 export class UniswapPoolStream extends AbstractStream<
@@ -69,13 +68,6 @@ export class UniswapPoolStream extends AbstractStream<
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
-
-            const res = [];
-
             return block.logs
               .map((l): UniswapPool | null => {
                 if (abiAlgebraV1.Pool.is(l)) {
@@ -91,7 +83,6 @@ export class UniswapPoolStream extends AbstractStream<
                       index: l.transactionIndex,
                     },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 } else if (abiUniswapV3.PoolCreated.is(l)) {
                   const data = abiUniswapV3.PoolCreated.decode(l);
@@ -109,7 +100,6 @@ export class UniswapPoolStream extends AbstractStream<
                       index: l.transactionIndex,
                     },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
 

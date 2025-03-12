@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRange, BlockRef, Offset } from '../../core/abstract_stream';
+import { AbstractStream, BlockRange, BlockRef } from '../../core/abstract_stream';
 import { events as swapsEvents } from './swaps';
 import { events as factoryEvents } from './factory';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
@@ -34,7 +34,6 @@ export type UniswapSwap = {
     logIndex: number;
   };
   timestamp: Date;
-  offset: Offset;
 };
 
 type Args = {
@@ -111,12 +110,6 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
             .flatMap((block: any) => {
               if (!block.logs) return [];
 
-              const offset = this.encodeOffset({
-                number: block.header.number,
-                timestamp: block.header.timestamp,
-                hash: block.header.hash,
-              });
-
               const logs = block.logs.filter((l) => swapsEvents.Swap.is(l));
               const metadata = this.getPoolMetadata(logs);
 
@@ -158,7 +151,6 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
                     logIndex: l.logIndex,
                   },
                   timestamp: new Date(block.header.timestamp * 1000),
-                  offset,
                 };
               });
             })

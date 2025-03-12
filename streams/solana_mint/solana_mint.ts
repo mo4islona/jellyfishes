@@ -12,7 +12,6 @@ export type SolanaMint = {
   freezeAuthority?: string;
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -21,17 +20,14 @@ export class SolanaMintStream extends AbstractStream<
     fromBlock: number;
     toBlock?: number;
   },
-  SolanaMint,
-  { number: number; hash: string }
+  SolanaMint
 > {
   async stream(): Promise<ReadableStream<SolanaMint[]>> {
     const {args} = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -79,11 +75,6 @@ export class SolanaMintStream extends AbstractStream<
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
-
             const mints: SolanaMint[] = [];
 
             for (const ins of block.instructions) {
@@ -118,7 +109,6 @@ export class SolanaMintStream extends AbstractStream<
                 },
                 block: {number: block.header.number, hash: block.header.hash},
                 timestamp: new Date(block.header.timestamp * 1000),
-                offset,
               });
             }
 

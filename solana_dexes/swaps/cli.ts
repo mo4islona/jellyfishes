@@ -108,7 +108,7 @@ async function main() {
       format: 'JSONEachRow',
     });
 
-    await ds.ack(swaps);
+    await ds.ack();
   }
 }
 

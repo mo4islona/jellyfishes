@@ -36,7 +36,7 @@ async function main() {
       // Save the erc20 transfers to the database);
       // await manager.save([]);
 
-      await dataSource.ack<TypeormAckArgs>(erc20, manager);
+      await dataSource.ack<TypeormAckArgs>(manager);
     });
   }
 }

@@ -82,7 +82,7 @@ async function main() {
     /**
      * Ack progress
      */
-    await dataSource.ack(erc20);
+    await dataSource.ack();
 
     logger.debug(`processed ${erc20.length} erc20 transfers`);
   }
