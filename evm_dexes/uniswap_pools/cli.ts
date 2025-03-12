@@ -1,9 +1,9 @@
 import { UniswapPoolStream } from '../../streams/uniswap_pools/uniswap_pool_stream';
 import { getConfig } from '../config';
-import { DexPoolCli } from '../common/dex_pool_cli';
+import { DexPoolCli, DexPoolCliConfig } from '../common/dex_pool_cli';
 
 class UniswapPoolCli extends DexPoolCli {
-  constructor(config: any) {
+  constructor(config: DexPoolCliConfig) {
     super(config, 'uniswap.v3');
   }
 

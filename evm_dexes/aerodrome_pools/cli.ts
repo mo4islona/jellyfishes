@@ -1,9 +1,9 @@
 import { AerodromePoolStream } from '../../streams/aerodrome_pools/aerodrome_pool_stream';
 import { getConfig } from '../config';
-import { DexPoolCli } from '../common/dex_pool_cli';
+import { DexPoolCli, DexPoolCliConfig } from '../common/dex_pool_cli';
 
 class AerodromePoolCli extends DexPoolCli {
-  constructor(config: any) {
+  constructor(config: DexPoolCliConfig) {
     super(config, 'aerodrome');
   }
 
