@@ -10,7 +10,7 @@ async function main() {
       fromBlock: 240_000_000,
     },
     logger,
-    onStart: async ({current, initial}) => {
+    onStart: async ({ current, initial }) => {
       if (initial.number === current.number) {
         logger.info(`Syncing from ${formatNumber(current.number)}`);
         return;
@@ -19,7 +19,7 @@ async function main() {
 
       logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
     },
-    onProgress: ({state, interval}) => {
+    onProgress: ({ state, interval }) => {
       logger.info({
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
         speed: `${interval.processedPerSecond} blocks/second`,

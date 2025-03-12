@@ -54,7 +54,7 @@ export class SolanaSwapsStream extends AbstractStream<
   SolanaSwap
 > {
   async stream(): Promise<ReadableStream<SolanaSwap[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
     const types = args.type || [
       'orca_whirlpool',
@@ -149,7 +149,7 @@ export class SolanaSwapsStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
@@ -214,7 +214,7 @@ export class SolanaSwapsStream extends AbstractStream<
               swaps.push({
                 id: `${txHash}/${ins.transactionIndex}`,
                 type: swap.type,
-                block: {number: block.header.number, hash: block.header.hash},
+                block: { number: block.header.number, hash: block.header.hash },
                 instruction: {
                   address: ins.instructionAddress,
                 },

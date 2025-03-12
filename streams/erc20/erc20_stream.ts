@@ -20,7 +20,7 @@ export class Erc20Stream extends AbstractStream<
   Erc20Event
 > {
   async stream(): Promise<ReadableStream<Erc20Event[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
     const source = await this.getStream({
       type: 'evm',
@@ -56,7 +56,7 @@ export class Erc20Stream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: async ({blocks}, controller) => {
+        transform: async ({ blocks }, controller) => {
           // FIXME any
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];

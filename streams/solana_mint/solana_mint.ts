@@ -23,7 +23,7 @@ export class SolanaMintStream extends AbstractStream<
   SolanaMint
 > {
   async stream(): Promise<ReadableStream<SolanaMint[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
     const source = await this.getStream({
       type: 'solana',
@@ -70,7 +70,7 @@ export class SolanaMintStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
@@ -107,7 +107,7 @@ export class SolanaMintStream extends AbstractStream<
                   hash: txHash,
                   index: ins.transactionIndex,
                 },
-                block: {number: block.header.number, hash: block.header.hash},
+                block: { number: block.header.number, hash: block.header.hash },
                 timestamp: new Date(block.header.timestamp * 1000),
               });
             }

@@ -19,12 +19,12 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw_v2
 
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS eth_amounts_mv
-            (
-             timestamp DateTime,
-             network LowCardinality(String),
-             eth_amount Float64,
-             usdc_amount Float64
-                ) ENGINE SummingMergeTree() ORDER BY (timestamp, network) POPULATE
+(
+    timestamp DateTime,
+    network LowCardinality(String),
+    eth_amount Float64,
+    usdc_amount Float64
+) ENGINE SummingMergeTree() ORDER BY (timestamp, network) POPULATE
 AS
 SELECT toStartOfMinute(timestamp),
        network,
@@ -50,11 +50,11 @@ WHERE (
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS base_eth_prices_mv
 (
- timestamp DATETIME,
- network LowCardinality(String),
- token String,
- price Float64,
- sign Int8
+    timestamp DATETIME,
+    network LowCardinality(String),
+    token String,
+    price Float64,
+    sign Int8
 ) ENGINE CollapsingMergeTree(sign) ORDER BY (timestamp, token, network) POPULATE
 AS
 SELECT timestamp,

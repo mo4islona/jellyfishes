@@ -6,12 +6,12 @@ export const events = {
   FeeAmountEnabled: event(
     '0xc66a3fdf07232cdd185febcc6579d408c241b47ae2f9907d84be655141eeaecc',
     'FeeAmountEnabled(uint24,int24)',
-    {fee: indexed(p.uint24), tickSpacing: indexed(p.int24)},
+    { fee: indexed(p.uint24), tickSpacing: indexed(p.int24) },
   ),
   OwnerChanged: event(
     '0xb532073b38c83145e3e5135377a08bf9aab55bc0fd7c1179cd4fb995d2a5159c',
     'OwnerChanged(address,address)',
-    {oldOwner: indexed(p.address), newOwner: indexed(p.address)},
+    { oldOwner: indexed(p.address), newOwner: indexed(p.address) },
   ),
   PoolCreated: event(
     '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
@@ -30,7 +30,7 @@ export const functions = {
   createPool: fun(
     '0xa1671295',
     'createPool(address,address,uint24)',
-    {tokenA: p.address, tokenB: p.address, fee: p.uint24},
+    { tokenA: p.address, tokenB: p.address, fee: p.uint24 },
     p.address,
   ),
   enableFeeAmount: fun('0x8a7c195f', 'enableFeeAmount(uint24,int24)', {
@@ -40,22 +40,22 @@ export const functions = {
   feeAmountTickSpacing: viewFun(
     '0x22afcccb',
     'feeAmountTickSpacing(uint24)',
-    {fee: p.uint24},
+    { fee: p.uint24 },
     p.int24,
   ),
   getPool: viewFun(
     '0x1698ee82',
     'getPool(address,address,uint24)',
-    {tokenA: p.address, tokenB: p.address, fee: p.uint24},
+    { tokenA: p.address, tokenB: p.address, fee: p.uint24 },
     p.address,
   ),
   owner: viewFun('0x8da5cb5b', 'owner()', {}, p.address),
-  setOwner: fun('0x13af4035', 'setOwner(address)', {_owner: p.address}),
+  setOwner: fun('0x13af4035', 'setOwner(address)', { _owner: p.address }),
 };
 
 export class Contract extends ContractBase {
   feeAmountTickSpacing(fee: FeeAmountTickSpacingParams['fee']) {
-    return this.eth_call(functions.feeAmountTickSpacing, {fee});
+    return this.eth_call(functions.feeAmountTickSpacing, { fee });
   }
 
   getPool(
@@ -63,7 +63,7 @@ export class Contract extends ContractBase {
     tokenB: GetPoolParams['tokenB'],
     fee: GetPoolParams['fee'],
   ) {
-    return this.eth_call(functions.getPool, {tokenA, tokenB, fee});
+    return this.eth_call(functions.getPool, { tokenA, tokenB, fee });
   }
 
   owner() {

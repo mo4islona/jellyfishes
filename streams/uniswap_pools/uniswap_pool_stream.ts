@@ -27,7 +27,7 @@ export class UniswapPoolStream extends AbstractStream<
   UniswapPool
 > {
   async stream(): Promise<ReadableStream<UniswapPool[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
     const source = await this.getStream({
       type: 'evm',
@@ -63,7 +63,7 @@ export class UniswapPoolStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];

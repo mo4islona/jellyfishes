@@ -62,7 +62,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
   }
 
   async stream(): Promise<ReadableStream<UniswapSwap[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
     const source = await this.getStream({
       type: 'evm',
@@ -102,7 +102,7 @@ export class UniswapSwapStream extends AbstractStream<Args, UniswapSwap> {
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           this.savePoolMetadata(blocks);
 
           // FIXME

@@ -6,12 +6,12 @@ export const events = {
   DefaultCommunityFee: event(
     '0x88cb5103fd9d88d417e72dc496030c71c65d1500548a9e9530e7d812b6a35558',
     'DefaultCommunityFee(uint8)',
-    {newDefaultCommunityFee: p.uint8},
+    { newDefaultCommunityFee: p.uint8 },
   ),
   FarmingAddress: event(
     '0x56b9e8342f530796ceed0d5529abdcdeae6e4f2ac1dc456ceb73bbda898e0cd3',
     'FarmingAddress(address)',
-    {newFarmingAddress: indexed(p.address)},
+    { newFarmingAddress: indexed(p.address) },
   ),
   FeeConfiguration: event(
     '0x4035ab409f15e202f9f114632e1fb14a0552325955722be18503403e7f98730c',
@@ -31,17 +31,17 @@ export const events = {
   Owner: event(
     '0xa5e220c2c27d986cc8efeafa8f34ba6ea6bf96a34e146b29b6bdd8587771b130',
     'Owner(address)',
-    {newOwner: indexed(p.address)},
+    { newOwner: indexed(p.address) },
   ),
   Pool: event(
     '0x91ccaa7a278130b65168c3a0c8d3bcae84cf5e43704342bd3ec0b59e59c036db',
     'Pool(address,address,address)',
-    {token0: indexed(p.address), token1: indexed(p.address), pool: p.address},
+    { token0: indexed(p.address), token1: indexed(p.address), pool: p.address },
   ),
   VaultAddress: event(
     '0xb9c265ae4414f501736ec5d4961edc3309e4385eb2ff3feeecb30fb36621dd83',
     'VaultAddress(address)',
-    {newVaultAddress: indexed(p.address)},
+    { newVaultAddress: indexed(p.address) },
   ),
 };
 
@@ -65,7 +65,7 @@ export const functions = {
   createPool: fun(
     '0xe3433615',
     'createPool(address,address)',
-    {tokenA: p.address, tokenB: p.address},
+    { tokenA: p.address, tokenB: p.address },
     p.address,
   ),
   defaultCommunityFee: viewFun('0x2f8a39dd', 'defaultCommunityFee()', {}, p.uint8),
@@ -74,7 +74,7 @@ export const functions = {
   poolByPair: viewFun(
     '0xd9a641e1',
     'poolByPair(address,address)',
-    {_0: p.address, _1: p.address},
+    { _0: p.address, _1: p.address },
     p.address,
   ),
   poolDeployer: viewFun('0x3119049a', 'poolDeployer()', {}, p.address),
@@ -99,8 +99,8 @@ export const functions = {
   setFarmingAddress: fun('0xb001f618', 'setFarmingAddress(address)', {
     _farmingAddress: p.address,
   }),
-  setOwner: fun('0x13af4035', 'setOwner(address)', {_owner: p.address}),
-  setVaultAddress: fun('0x85535cc5', 'setVaultAddress(address)', {_vaultAddress: p.address}),
+  setOwner: fun('0x13af4035', 'setOwner(address)', { _owner: p.address }),
+  setVaultAddress: fun('0x85535cc5', 'setVaultAddress(address)', { _vaultAddress: p.address }),
   vaultAddress: viewFun('0x430bf08a', 'vaultAddress()', {}, p.address),
 };
 
@@ -122,7 +122,7 @@ export class Algebra extends ContractBase {
   }
 
   poolByPair(_0: PoolByPairParams['_0'], _1: PoolByPairParams['_1']) {
-    return this.eth_call(functions.poolByPair, {_0, _1});
+    return this.eth_call(functions.poolByPair, { _0, _1 });
   }
 
   poolDeployer() {
