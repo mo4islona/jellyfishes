@@ -33,9 +33,9 @@ async function main() {
   const logger = createLogger('solana_swaps');
 
   const ds = new SolanaSwapsStream({
-    portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
+    portal: 'https://portal.sqd.dev/datasets/solana-beta',
     args: {
-      fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 294_285_951,
+      fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 317617480,
       // type: ['orca_whirlpool'],
       // fromBlock: 300279448,
       // toBlock: 300279448,

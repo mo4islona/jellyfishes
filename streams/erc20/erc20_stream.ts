@@ -8,6 +8,11 @@ export type Erc20Event = {
   token_address: string;
   block: BlockRef;
   tx: string;
+  transaction: {
+    hash: string;
+    index: number;
+    logIndex: number;
+  };
   timestamp: Date;
 };
 
@@ -15,7 +20,7 @@ export class Erc20Stream extends AbstractStream<
   {
     fromBlock: number;
     toBlock?: number;
-    contracts: string[];
+    contracts?: string[];
   },
   Erc20Event
 > {
@@ -72,6 +77,11 @@ export class Erc20Stream extends AbstractStream<
                   amount: data.value,
                   token_address: l.address,
                   block: block.header,
+                  transaction: {
+                    hash: l.transactionHash,
+                    index: l.transactionIndex,
+                    logIndex: l.logIndex,
+                  },
                   timestamp: new Date(block.header.timestamp * 1000),
                   tx: l.transactionHash,
                 };
