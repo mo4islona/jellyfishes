@@ -1,8 +1,10 @@
-CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw
+CREATE TABLE IF NOT EXISTS evm_swaps_raw
 (
     timestamp           DateTime CODEC (DoubleDelta, ZSTD),
     factory_address     LowCardinality(String),
     network             LowCardinality(String),
+    dex_name            LowCardinality(String),
+    protocol            LowCardinality(String),
     token_a             String,
     token_b             String,
     amount_a            Float64,

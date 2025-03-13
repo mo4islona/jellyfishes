@@ -52,12 +52,12 @@ export const events = {
   IncreaseObservationCardinalityNext: event(
     '0xac49e518f90a358f652e4400164f05a5d8f7e35e7747279bc3a93dbf584e125a',
     'IncreaseObservationCardinalityNext(uint16,uint16)',
-    {observationCardinalityNextOld: p.uint16, observationCardinalityNextNew: p.uint16},
+    { observationCardinalityNextOld: p.uint16, observationCardinalityNextNew: p.uint16 },
   ),
   Initialize: event(
     '0x98636036cb66a9c19a37435efc1e90142190214e8abeb821bdba3f2990dd4c95',
     'Initialize(uint160,int24)',
-    {sqrtPriceX96: p.uint160, tick: p.int24},
+    { sqrtPriceX96: p.uint160, tick: p.int24 },
   ),
   Mint: event(
     '0x7a53080ba414158be7ec69b987b5fb7d07dee101fe85488f0853ae16239d0bde',
@@ -101,8 +101,8 @@ export const functions = {
   burn: fun(
     '0xa34123a7',
     'burn(int24,int24,uint128)',
-    {tickLower: p.int24, tickUpper: p.int24, amount: p.uint128},
-    {amount0: p.uint256, amount1: p.uint256},
+    { tickLower: p.int24, tickUpper: p.int24, amount: p.uint128 },
+    { amount0: p.uint256, amount1: p.uint256 },
   ),
   collect: fun(
     '0x4f1eb3d8',
@@ -114,13 +114,13 @@ export const functions = {
       amount0Requested: p.uint128,
       amount1Requested: p.uint128,
     },
-    {amount0: p.uint128, amount1: p.uint128},
+    { amount0: p.uint128, amount1: p.uint128 },
   ),
   collectProtocol: fun(
     '0x85b66729',
     'collectProtocol(address,uint128,uint128)',
-    {recipient: p.address, amount0Requested: p.uint128, amount1Requested: p.uint128},
-    {amount0: p.uint128, amount1: p.uint128},
+    { recipient: p.address, amount0Requested: p.uint128, amount1Requested: p.uint128 },
+    { amount0: p.uint128, amount1: p.uint128 },
   ),
   factory: viewFun('0xc45a0155', 'factory()', {}, p.address),
   fee: viewFun('0xddca3f43', 'fee()', {}, p.uint24),
@@ -135,9 +135,9 @@ export const functions = {
   increaseObservationCardinalityNext: fun(
     '0x32148f67',
     'increaseObservationCardinalityNext(uint16)',
-    {observationCardinalityNext: p.uint16},
+    { observationCardinalityNext: p.uint16 },
   ),
-  initialize: fun('0xf637731d', 'initialize(uint160)', {sqrtPriceX96: p.uint160}),
+  initialize: fun('0xf637731d', 'initialize(uint160)', { sqrtPriceX96: p.uint160 }),
   liquidity: viewFun('0x1a686502', 'liquidity()', {}, p.uint128),
   maxLiquidityPerTick: viewFun('0x70cf754a', 'maxLiquidityPerTick()', {}, p.uint128),
   mint: fun(
@@ -150,12 +150,12 @@ export const functions = {
       amount: p.uint128,
       data: p.bytes,
     },
-    {amount0: p.uint256, amount1: p.uint256},
+    { amount0: p.uint256, amount1: p.uint256 },
   ),
   observations: viewFun(
     '0x252c09d7',
     'observations(uint256)',
-    {index: p.uint256},
+    { index: p.uint256 },
     {
       blockTimestamp: p.uint32,
       tickCumulative: p.int56,
@@ -166,13 +166,13 @@ export const functions = {
   observe: viewFun(
     '0x883bdbfd',
     'observe(uint32[])',
-    {secondsAgos: p.array(p.uint32)},
-    {tickCumulatives: p.array(p.int56), secondsPerLiquidityCumulativeX128s: p.array(p.uint160)},
+    { secondsAgos: p.array(p.uint32) },
+    { tickCumulatives: p.array(p.int56), secondsPerLiquidityCumulativeX128s: p.array(p.uint160) },
   ),
   positions: viewFun(
     '0x514ea4bf',
     'positions(bytes32)',
-    {key: p.bytes32},
+    { key: p.bytes32 },
     {
       _liquidity: p.uint128,
       feeGrowthInside0LastX128: p.uint256,
@@ -185,7 +185,7 @@ export const functions = {
     '0x1ad8b03b',
     'protocolFees()',
     {},
-    {token0: p.uint128, token1: p.uint128},
+    { token0: p.uint128, token1: p.uint128 },
   ),
   setFeeProtocol: fun('0x8206a4d1', 'setFeeProtocol(uint8,uint8)', {
     feeProtocol0: p.uint8,
@@ -208,7 +208,7 @@ export const functions = {
   snapshotCumulativesInside: viewFun(
     '0xa38807f2',
     'snapshotCumulativesInside(int24,int24)',
-    {tickLower: p.int24, tickUpper: p.int24},
+    { tickLower: p.int24, tickUpper: p.int24 },
     {
       tickCumulativeInside: p.int56,
       secondsPerLiquidityInsideX128: p.uint160,
@@ -225,14 +225,14 @@ export const functions = {
       sqrtPriceLimitX96: p.uint160,
       data: p.bytes,
     },
-    {amount0: p.int256, amount1: p.int256},
+    { amount0: p.int256, amount1: p.int256 },
   ),
-  tickBitmap: viewFun('0x5339c296', 'tickBitmap(int16)', {wordPosition: p.int16}, p.uint256),
+  tickBitmap: viewFun('0x5339c296', 'tickBitmap(int16)', { wordPosition: p.int16 }, p.uint256),
   tickSpacing: viewFun('0xd0c93a7c', 'tickSpacing()', {}, p.int24),
   ticks: viewFun(
     '0xf30dba93',
     'ticks(int24)',
-    {tick: p.int24},
+    { tick: p.int24 },
     {
       liquidityGross: p.uint128,
       liquidityNet: p.int128,
@@ -274,15 +274,15 @@ export class Contract extends ContractBase {
   }
 
   observations(index: ObservationsParams['index']) {
-    return this.eth_call(functions.observations, {index});
+    return this.eth_call(functions.observations, { index });
   }
 
   observe(secondsAgos: ObserveParams['secondsAgos']) {
-    return this.eth_call(functions.observe, {secondsAgos});
+    return this.eth_call(functions.observe, { secondsAgos });
   }
 
   positions(key: PositionsParams['key']) {
-    return this.eth_call(functions.positions, {key});
+    return this.eth_call(functions.positions, { key });
   }
 
   protocolFees() {
@@ -297,11 +297,11 @@ export class Contract extends ContractBase {
     tickLower: SnapshotCumulativesInsideParams['tickLower'],
     tickUpper: SnapshotCumulativesInsideParams['tickUpper'],
   ) {
-    return this.eth_call(functions.snapshotCumulativesInside, {tickLower, tickUpper});
+    return this.eth_call(functions.snapshotCumulativesInside, { tickLower, tickUpper });
   }
 
   tickBitmap(wordPosition: TickBitmapParams['wordPosition']) {
-    return this.eth_call(functions.tickBitmap, {wordPosition});
+    return this.eth_call(functions.tickBitmap, { wordPosition });
   }
 
   tickSpacing() {
@@ -309,7 +309,7 @@ export class Contract extends ContractBase {
   }
 
   ticks(tick: TicksParams['tick']) {
-    return this.eth_call(functions.ticks, {tick});
+    return this.eth_call(functions.ticks, { tick });
   }
 
   token0() {

@@ -2,6 +2,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+export const NetworkValues = ['base-mainnet', 'ethereum-mainnet'] as const;
+
+export type Network = (typeof NetworkValues)[number];
+
 export const CONTRACTS = {
   factory: {
     'base-mainnet': {
@@ -35,9 +39,9 @@ export function getConfig() {
       : 'ethereum-mainnet';
 
   return {
-    network,
+    network: network as Network,
     factory: CONTRACTS.factory[network],
-    dbPath: process.env.DB_PATH || './uniswap-pools.db',
+    dbPath: process.env.DB_PATH || './pools.db',
     portal: PORTAL[network],
   };
 }
