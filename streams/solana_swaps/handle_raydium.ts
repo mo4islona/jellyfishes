@@ -8,6 +8,7 @@ import {
   getInstructionBalances,
   getTransactionHash,
 } from './utils';
+import * as process from 'node:process';
 
 export function handleRaydiumClmm(ins: Instruction, block: Block): SolanaSwapTransfer {
   // const swap = whirlpool.instructions.swap.decode(ins);
@@ -16,32 +17,16 @@ export function handleRaydiumClmm(ins: Instruction, block: Block): SolanaSwapTra
   );
 
   const tokenBalances = getInstructionBalances(ins, block);
-  const inAcc = tokenBalances.find((b) => b.account === src.accounts.destination);
-  const inputMint = inAcc?.preMint || inAcc?.postMint;
-  if (!inputMint) {
-    throw new Error(
-      `Raydium CLMM inputMint can't be found for tx ${getTransactionHash(ins, block)}`,
-    );
-  }
-
-  const outAcc = tokenBalances.find((b) => b.account === dest.accounts.source);
-  const outputMint = outAcc?.preMint || outAcc?.postMint;
-  if (!outputMint) {
-    throw new Error(
-      `Raydium CLMM outputMint can't be found for tx ${getTransactionHash(ins, block)}`,
-    );
-  }
-
   return {
     type: 'raydium_clmm',
     account: src.accounts.authority,
-    input: {
+    in: {
       amount: src.data.amount,
-      mint: inputMint,
+      token: tokenBalances.find((b) => b.account === src.accounts.destination),
     },
-    output: {
+    out: {
       amount: dest.data.amount,
-      mint: outputMint,
+      token: tokenBalances.find((b) => b.account === dest.accounts.source),
     },
   };
 }
@@ -52,32 +37,16 @@ export function handleRaydiumAmm(ins: Instruction, block: Block): SolanaSwapTran
   );
 
   const tokenBalances = getInstructionBalances(ins, block);
-  const inAcc = tokenBalances.find((b) => b.account === src.accounts.destination);
-  const inputMint = inAcc?.preMint || inAcc?.postMint;
-  if (!inputMint) {
-    throw new Error(
-      `Raydium AMM inputMint can't be found for tx ${getTransactionHash(ins, block)}`,
-    );
-  }
-
-  const outAcc = tokenBalances.find((b) => b.account === dest.accounts.source);
-  const outputMint = outAcc?.preMint || outAcc?.postMint;
-  if (!outputMint) {
-    throw new Error(
-      `Raydium AMM outputMint can't be found for tx ${getTransactionHash(ins, block)}`,
-    );
-  }
-
   return {
     type: 'raydium_amm',
     account: src.accounts.authority,
-    input: {
+    in: {
       amount: src.data.amount,
-      mint: inputMint,
+      token: tokenBalances.find((b) => b.account === src.accounts.destination),
     },
-    output: {
+    out: {
       amount: dest.data.amount,
-      mint: outputMint,
+      token: tokenBalances.find((b) => b.account === dest.accounts.source),
     },
   };
 }

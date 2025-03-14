@@ -9,6 +9,7 @@ import {
   toUnixTime,
 } from '../clickhouse';
 import { getSortFunction } from './util';
+import * as process from 'node:process';
 
 const DECIMALS = {
   So11111111111111111111111111111111111111112: 9,
@@ -47,15 +48,15 @@ async function main() {
       table: 'solana_sync_status',
       id: 'dex_swaps',
     }),
-    onStart: async ({current, initial}) => {
+    onStart: async ({ current, initial }) => {
       /**
        * Clean all data before the current offset.
        * There is a small chance if the stream is interrupted, the data will be duplicated.
        * We just clean it up at the start to avoid duplicates.
        */
       await cleanAllBeforeOffset(
-        {clickhouse, logger},
-        {table: 'solana_swaps_raw', column: 'block_number', offset: current.number},
+        { clickhouse, logger },
+        { table: 'solana_swaps_raw', column: 'block_number', offset: current.number },
       );
 
       if (initial.number === current.number) {
@@ -65,7 +66,7 @@ async function main() {
 
       logger.info(`Resuming from ${formatNumber(current.number)}`);
     },
-    onProgress: ({state, interval}) => {
+    onProgress: ({ state, interval }) => {
       logger.info({
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
         speed: `${interval.processedPerSecond} blocks/second`,
@@ -99,8 +100,14 @@ async function main() {
             token_a: tokenA.mint,
             token_b: tokenB.mint,
             a_to_b: !needTokenSwap,
-            amount_a: denominate(tokenA.amount, tokenA.mint).toString(),
-            amount_b: denominate(tokenB.amount, tokenB.mint).toString(),
+            amount_a: (
+              ((needTokenSwap ? 1 : -1) * Number(tokenA.amount)) /
+              10 ** tokenA.decimals
+            ).toString(),
+            amount_b: (
+              ((needTokenSwap ? -1 : 1) * Number(tokenB.amount)) /
+              10 ** tokenB.decimals
+            ).toString(),
             timestamp: toUnixTime(s.timestamp),
             sign: 1,
           };

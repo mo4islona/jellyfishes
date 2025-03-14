@@ -26,19 +26,24 @@ export type SolanaSwap = {
   input: {
     amount: bigint;
     mint: string;
-    //vault: string };
+    decimals: number;
   };
   output: {
     amount: bigint;
     mint: string;
-    // vault: string
+    decimals: number;
   };
   instruction: { address: number[] };
   block: BlockRef;
   timestamp: Date;
 };
 
-export type SolanaSwapTransfer = Pick<SolanaSwap, 'input' | 'output' | 'account' | 'type'>;
+export type SolanaSwapTransfer = {
+  type: SwapType;
+  account: string;
+  in: { amount: bigint; token: { postMint: string; postDecimals: number } };
+  out: { amount: bigint; token: { postMint: string; postDecimals: number } };
+};
 
 export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
@@ -90,6 +95,7 @@ export class SolanaSwapsStream extends AbstractStream<
           account: true,
           preMint: true,
           postMint: true,
+          postDecimals: true,
         },
       },
       instructions: types.map((type) => {
@@ -203,8 +209,8 @@ export class SolanaSwapsStream extends AbstractStream<
               if (!swap) continue;
               else if (
                 args.tokens &&
-                !args.tokens.includes(swap.input.mint) &&
-                !args.tokens.includes(swap.output.mint)
+                !args.tokens.includes(swap.in.token.postMint) &&
+                !args.tokens.includes(swap.out.token.postMint)
               ) {
                 continue;
               }
@@ -218,8 +224,16 @@ export class SolanaSwapsStream extends AbstractStream<
                 instruction: {
                   address: ins.instructionAddress,
                 },
-                input: swap.input,
-                output: swap.output,
+                input: {
+                  amount: swap.in.amount,
+                  mint: swap.in.token.postMint,
+                  decimals: swap.in.token.postDecimals,
+                },
+                output: {
+                  amount: swap.out.amount,
+                  mint: swap.out.token.postMint,
+                  decimals: swap.out.token.postDecimals,
+                },
                 account: swap.account,
                 transaction: {
                   hash: txHash,

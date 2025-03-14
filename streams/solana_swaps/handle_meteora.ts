@@ -3,11 +3,11 @@ import * as tokenProgram from './abi/tokenProgram';
 import { SolanaSwapTransfer } from './solana_swaps';
 import {
   Block,
-  Instruction,
   getInnerTransfersByLevel,
   getInstructionBalances,
   getInstructionD1,
   getTransactionHash,
+  Instruction,
 } from './utils';
 
 export function handleMeteoraDamm(
@@ -43,7 +43,6 @@ export function handleMeteoraDamm(
 
   // DAMM could have internal transfers, the last two transfers are final src and dest
   const [src, dest] = transfers.slice(-2);
-
   if (!src || !dest) {
     logger.warn({
       message: 'Meteora DAMM: src or dest not found',
@@ -57,29 +56,16 @@ export function handleMeteoraDamm(
   }
 
   const tokenBalances = getInstructionBalances(ins, block);
-
-  const inAcc = block.tokenBalances.find((b) => b.account === src.accounts.destination);
-  const inputMint = inAcc?.preMint || inAcc?.postMint;
-
-  const outAcc = tokenBalances.find((b) => b.account === dest.accounts.source);
-  const outputMint = outAcc?.preMint || outAcc?.postMint;
-
-  if (!inputMint || !outputMint) {
-    throw new Error(
-      `meteora DAMM mints can't be found for tx ${getTransactionHash(ins, block)} at ${block.header.number}`,
-    );
-  }
-
   return {
     type: 'meteora_damm',
     account: src.accounts.authority,
-    input: {
+    in: {
       amount: src.data.amount,
-      mint: inputMint,
+      token: tokenBalances.find((b) => b.account === src.accounts.destination),
     },
-    output: {
+    out: {
       amount: dest.data.amount,
-      mint: outputMint,
+      token: tokenBalances.find((b) => b.account === dest.accounts.source),
     },
   };
 }
@@ -95,34 +81,18 @@ export function handleMeteoraDlmm(ins: Instruction, block: Block): SolanaSwapTra
   // TODO if there are more than 2 transfers, is the first one fee?
   // 2fsnqWFXfmPkNPMTe2BVrDgSEhgezDTtvXxedrDHJrrLXNWR7K2DpPZ13N2DppGrYmTpofAfToXzaqyBWiumJGZ4
   const [src, dest] = transfers.slice(-2);
-
   const tokenBalances = getInstructionBalances(ins, block);
-  const inAcc = tokenBalances.find((b) => b.account === src.accounts.destination);
-  const inputMint = inAcc?.preMint || inAcc?.postMint;
-  if (!inputMint) {
-    throw new Error(
-      `Meteora DLMM inputMint can't be found for tx ${getTransactionHash(ins, block)} at ${block.header.number}`,
-    );
-  }
-
-  const outAcc = tokenBalances.find((b) => b.account === dest.accounts.source);
-  const outputMint = outAcc?.preMint || outAcc?.postMint;
-  if (!outputMint) {
-    throw new Error(
-      `Meteora DLMM outputMint can't be found for tx ${getTransactionHash(ins, block)} at ${block.header.number}`,
-    );
-  }
 
   return {
     type: 'meteora_dlmm',
     account: src.accounts.owner,
-    input: {
+    in: {
       amount: src.data.amount,
-      mint: inputMint,
+      token: tokenBalances.find((b) => b.account === src.accounts.destination),
     },
-    output: {
+    out: {
       amount: dest.data.amount,
-      mint: outputMint,
+      token: tokenBalances.find((b) => b.account === dest.accounts.source),
     },
   };
 }
