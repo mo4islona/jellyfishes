@@ -5,23 +5,6 @@ import { cleanAllBeforeOffset, createClickhouseClient, ensureTables, toUnixTime,
 import { getConfig } from '../config';
 import { Erc20Stream } from '../../streams/erc20/erc20_stream';
 
-const DECIMALS = {
-  'base-mainnet': {
-    ['0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'.toLowerCase()]: 6, // USDC
-    ['0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'.toLowerCase()]: 6, // USDT
-  },
-  'ethereum-mainnet': {
-    ['0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase()]: 6, // USDC
-    ['0xdac17f958d2ee523a2206206994597c13d831ec7'.toLowerCase()]: 6, // USDT
-  },
-};
-
-function denominate(network: string, address: string, amount: bigint) {
-  const decimals = address ? DECIMALS[network][address] || 18 : 18;
-
-  return Number(amount) / 10 ** decimals;
-}
-
 const config = getConfig();
 
 const clickhouse = createClickhouseClient();
@@ -85,7 +68,7 @@ async function main() {
           token: t.token_address,
           from: t.from,
           to: t.to,
-          amount: denominate(config.network, t.token_address, t.amount).toString(),
+          amount: t.amount.toString(),
           timestamp: toUnixTime(t.timestamp),
           sign: 1,
         };
