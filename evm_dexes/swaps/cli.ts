@@ -9,6 +9,7 @@ import {
 } from '../../solana_dexes/clickhouse';
 import { EvmSwapStream } from '../../streams/swaps/evm_swap_stream';
 import { getConfig } from '../config';
+import { PoolMetadataStorage } from '../../streams/swaps/pool_metadata_storage';
 
 const DECIMALS = {
   'base-mainnet': {
@@ -38,12 +39,15 @@ logger.info(`Local database: ${config.dbPath}`);
 async function main() {
   await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
 
+  const poolMetadataStorage = new PoolMetadataStorage(config.dbPath, config.network);
+
   const ds = new EvmSwapStream({
     portal: config.portal.url,
     args: {
+      poolMetadataStorage,
       network: config.network,
       block: {
-        from: 13_843_704,
+        from: 24_968_076,
       },
       //factoryContract: config.factory.address,
       /**
@@ -52,20 +56,20 @@ async function main() {
        * and to expand the pool into a list of tokens within it.
        */
       dbPath: config.dbPath,
-      includeSwaps: false,
+      includeSwaps: true,
       dexs: [
-        // {
-        //   dexName: 'uniswap',
-        //   protocol: 'uniswap.v2',
-        // },
-        // {
-        //   dexName: 'uniswap',
-        //   protocol: 'uniswap.v3',
-        // },
-        // {
-        //   dexName: 'aerodrome',
-        //   protocol: 'aerodrome_basic',
-        // },
+        {
+          dexName: 'uniswap',
+          protocol: 'uniswap.v2',
+        },
+        {
+          dexName: 'uniswap',
+          protocol: 'uniswap.v3',
+        },
+        {
+          dexName: 'aerodrome',
+          protocol: 'aerodrome_basic',
+        },
         {
           dexName: 'aerodrome',
           protocol: 'aerodrome_slipstream',
@@ -108,11 +112,12 @@ async function main() {
     },
   });
 
-  for await (const swaps of await ds.stream()) {
+  for await (const swapsOrPoolMetadata of await ds.stream()) {
+    const swaps = swapsOrPoolMetadata.filter((s) => 'tokenA' in s);
     await clickhouse.insert({
       table: 'evm_swaps_raw',
       values: swaps.map((s) => {
-        return {
+        const res = {
           factory_address: s.factory.address,
           network: config.network,
           dex_name: s.dexName,
@@ -124,16 +129,19 @@ async function main() {
           account: s.account,
           token_a: s.tokenA.address,
           token_b: s.tokenB.address,
+          amount_a_raw: s.tokenA.amount.toString(),
+          amount_b_raw: s.tokenB.amount.toString(),
           amount_a: denominate(config.network, s.tokenA.address || '', s.tokenA.amount).toString(),
           amount_b: denominate(config.network, s.tokenB.address || '', s.tokenB.amount).toString(),
           timestamp: toUnixTime(s.timestamp),
           sign: 1,
         };
+
+        return res;
       }),
       format: 'JSONEachRow',
     });
-
-    await ds.ack(swaps);
+    await ds.ack(swapsOrPoolMetadata);
   }
 }
 

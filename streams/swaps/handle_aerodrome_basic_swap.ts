@@ -26,12 +26,12 @@ export const handleAerodromeBasicSwap = (
     account: transaction.from,
     tokenA: {
       address: poolMetadata.token_a,
-      amount: data.amount0Out > 0n ? data.amount0Out : data.amount0In,
+      amount: data.amount0Out > 0n ? -data.amount0Out : data.amount0In,
       sender: data.sender,
     },
     tokenB: {
       address: poolMetadata.token_b,
-      amount: data.amount1Out > 0n ? data.amount1Out : data.amount1In,
+      amount: data.amount1Out > 0n ? -data.amount1Out : data.amount1In,
       recipient: data.recipient,
     },
     pool: {

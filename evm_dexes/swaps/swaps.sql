@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
     protocol            LowCardinality(String),
     token_a             String,
     token_b             String,
+    amount_a_raw        Int256,
+    amount_b_raw        Int256,
     amount_a            Float64,
     amount_b            Float64,
     account             String,

@@ -9,6 +9,7 @@ import { events as UniswapV2FactoryEvents } from './uniswap.v2/factory';
 import { events as UniswapV3FactoryEvents } from './uniswap.v3/factory';
 import { events as AerodromeFactoryEvents } from './aerodrome/factory';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
+import { Offset } from 'core/abstract_stream';
 
 export type PoolMetadata = {
   network: Network;
@@ -19,6 +20,8 @@ export type PoolMetadata = {
   token_b: string;
   factory_address: string;
   block_number: number;
+
+  offset: Offset;
 };
 
 export class PoolMetadataStorage {
@@ -26,7 +29,10 @@ export class PoolMetadataStorage {
   statements: Record<string, StatementSync>;
   poolMetadataMap: Map<string, PoolMetadata>;
 
-  constructor(private readonly dbPath: string) {
+  constructor(
+    private readonly dbPath: string,
+    public readonly network: Network,
+  ) {
     this.db = new DatabaseSync(this.dbPath);
     // this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec(
@@ -59,7 +65,7 @@ export class PoolMetadataStorage {
   setPoolMetadata(pool: string, metadata: PoolMetadata) {
     this.poolMetadataMap.set(pool, metadata);
   }
-
+  /*
   savePoolMetadataIntoDb(blocks: any[], network: Network) {
     const pools = blocks
       .flatMap((block: any) => {
@@ -134,6 +140,15 @@ export class PoolMetadataStorage {
       this.poolMetadataMap.set(pool.pool, pool);
     }
   }
+*/
+
+  savePoolMetadataIntoDb(poolMetadata: PoolMetadata[]) {
+    for (const pool of poolMetadata) {
+      const { offset, ...rest } = pool;
+      this.statements.insert.run(rest);
+      this.poolMetadataMap.set(pool.pool, pool);
+    }
+  }
 
   getPoolMetadataFromDb(logs: { address: string }[]): Record<string, PoolMetadata> {
     const pools = uniq(logs.map((l) => l.address));
@@ -143,10 +158,10 @@ export class PoolMetadataStorage {
     const select = this.db.prepare(`
         SELECT *
         FROM "evm_pools"
-        WHERE "pool" IN (${params})
+        WHERE "network" = ? AND "pool" IN (${params})
     `);
 
-    const poolsMetadata = select.all(...pools) as PoolMetadata[];
+    const poolsMetadata = select.all(this.network, ...pools) as PoolMetadata[];
 
     return poolsMetadata.reduce(
       (res, pool) => ({

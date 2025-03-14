@@ -6,3 +6,5 @@ node_modules
 *.db-shm
 *.db-wal
 .env
+ch_data
+.DS_Store

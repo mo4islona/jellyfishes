@@ -10,12 +10,10 @@ class AerodromePoolCli extends DexPoolCli {
   async run(): Promise<void> {
     await this.initialize();
 
-    const ds = new AerodromePoolStream(
-      this.createStreamOptions('aerodrome_sync_status')
-    );
+    const ds = new AerodromePoolStream(this.createStreamOptions('aerodrome_sync_status'));
 
     this.db.exec(
-      'CREATE TABLE IF NOT EXISTS aerodrome_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, tick_spacing INTEGER, factory_address TEXT)'
+      'CREATE TABLE IF NOT EXISTS aerodrome_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, tick_spacing INTEGER, factory_address TEXT)',
     );
 
     const insert = this.db.prepare('INSERT OR IGNORE INTO aerodrome_pools VALUES (?, ?, ?, ?, ?)');
