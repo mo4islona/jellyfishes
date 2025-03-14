@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS evm_swaps_5m_volumes
     amount    Int128
 ) ENGINE = SummingMergeTree()
     ORDER BY (timestamp, token, account)
-    TTL timestamp + INTERVAL 7 DAY;
+    TTL timestamp + INTERVAL 30 DAY;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_5m_volumes_mva TO evm_swaps_5m_volumes AS
 SELECT toStartOfFiveMinutes(timestamp) as timestamp,
