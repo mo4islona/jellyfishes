@@ -9,7 +9,7 @@ import * as raydium_clmm from './abi/raydium_clmm/index';
 import { handleMeteoraDamm, handleMeteoraDlmm } from './handle_meteora';
 import { handleWhirlpool } from './handle_orca';
 import { handleRaydiumAmm, handleRaydiumClmm } from './handle_raydium';
-import { Instruction, getTransactionHash } from './utils';
+import { getTransactionHash, Instruction } from './utils';
 
 export type SwapType =
   | 'orca_whirlpool'
@@ -35,7 +35,6 @@ export type SolanaSwap = {
   };
   instruction: { address: number[] };
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -52,13 +51,10 @@ export class SolanaSwapsStream extends AbstractStream<
     tokens?: string[];
     type?: SwapType[];
   },
-  SolanaSwap,
-  { number: number; hash: string }
+  SolanaSwap
 > {
   async stream(): Promise<ReadableStream<SolanaSwap[]>> {
-    const {args} = this.options;
-
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
+    const { args } = this.options;
 
     const types = args.type || [
       'orca_whirlpool',
@@ -68,9 +64,9 @@ export class SolanaSwapsStream extends AbstractStream<
       'raydium_amm',
     ];
 
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -153,17 +149,12 @@ export class SolanaSwapsStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
 
             const swaps: SolanaSwap[] = [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             for (const ins of block.instructions) {
               let swap: SolanaSwapTransfer | null = null;
@@ -223,7 +214,7 @@ export class SolanaSwapsStream extends AbstractStream<
               swaps.push({
                 id: `${txHash}/${ins.transactionIndex}`,
                 type: swap.type,
-                block: {number: block.header.number, hash: block.header.hash},
+                block: { number: block.header.number, hash: block.header.hash },
                 instruction: {
                   address: ins.instructionAddress,
                 },
@@ -235,7 +226,6 @@ export class SolanaSwapsStream extends AbstractStream<
                   index: ins.transactionIndex,
                 },
                 timestamp: new Date(block.header.timestamp * 1000),
-                offset,
               });
             }
 

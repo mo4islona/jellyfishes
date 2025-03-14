@@ -26,7 +26,7 @@ export async function ensureTables(clickhouse: ClickHouseClient, dir: string) {
 
   for (const table of tables) {
     try {
-      await clickhouse.command({query: table});
+      await clickhouse.command({ query: table });
     } catch (e: any) {
       console.error(`======================`);
       console.error(table.trim());
@@ -64,7 +64,7 @@ export function toUnixTime(time: Date | string | number): number {
 }
 
 export async function cleanAllBeforeOffset(
-  {clickhouse, logger}: { clickhouse: ClickHouseClient; logger: Logger },
+  { clickhouse, logger }: { clickhouse: ClickHouseClient; logger: Logger },
   {
     table,
     offset,
@@ -72,6 +72,8 @@ export async function cleanAllBeforeOffset(
     filter,
   }: { table: string | string[]; offset: number; column: string; filter?: string },
 ) {
+  if (!offset) return;
+
   const tables = typeof table === 'string' ? [table] : table;
 
   await Promise.all(
@@ -82,7 +84,7 @@ export async function cleanAllBeforeOffset(
                 FROM ${table} FINAL
                 WHERE ${column} >= {current_offset:UInt32} ${filter ? `AND ${filter}` : ''}`,
         format: 'JSONEachRow',
-        query_params: {current_offset: offset},
+        query_params: { current_offset: offset },
       });
 
       const rows = await res.json();
@@ -94,7 +96,7 @@ export async function cleanAllBeforeOffset(
 
       await clickhouse.insert({
         table,
-        values: rows.map((row: any) => ({...row, sign: -1})),
+        values: rows.map((row: any) => ({ ...row, sign: -1 })),
         format: 'JSONEachRow',
       });
     }),

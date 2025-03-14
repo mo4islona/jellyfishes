@@ -1,13 +1,13 @@
 import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
 
 export type DexPoolTxData = {
-    timestamp: Date;
-    offset: Offset;
-    block: BlockRef;
-    transaction: {
-      hash: string;
-      index: number;
-    };    
+  timestamp: Date;
+  offset: Offset;
+  block: BlockRef;
+  transaction: {
+    hash: string;
+    index: number;
+  };
 };
 
 export type DexPool = {
@@ -62,6 +62,7 @@ export abstract class DexPoolStream<TDexPoolData, TDexPool extends DexPool> exte
             const offset = this.encodeOffset({
               number: block.header.number,
               hash: block.header.hash,
+              timestamp: block.header.timestamp,
             });
 
             const res = block.logs
@@ -70,15 +71,15 @@ export abstract class DexPoolStream<TDexPoolData, TDexPool extends DexPool> exte
                 if (!pool) return null;
 
                 return {
-                    ...pool,
-                    factoryAddress: log.address,
-                    block: block.header,
-                    transaction: {
-                        hash: log.transactionHash,
-                        index: log.transactionIndex,
-                    },              
-                    timestamp: new Date(block.header.timestamp * 1000),
-                    offset,            
+                  ...pool,
+                  factoryAddress: log.address,
+                  block: block.header,
+                  transaction: {
+                    hash: log.transactionHash,
+                    index: log.transactionIndex,
+                  },
+                  timestamp: new Date(block.header.timestamp * 1000),
+                  offset,
                 };
               })
               .filter(Boolean);
@@ -93,4 +94,4 @@ export abstract class DexPoolStream<TDexPoolData, TDexPool extends DexPool> exte
       }),
     );
   }
-} 
+}

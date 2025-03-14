@@ -1,4 +1,4 @@
-import { AbstractStream, BlockRef, Offset } from '../../core/abstract_stream';
+import { AbstractStream, BlockRef } from '../../core/abstract_stream';
 import { events as abi_events } from './abi';
 
 export type Erc20Event = {
@@ -8,29 +8,28 @@ export type Erc20Event = {
   token_address: string;
   block: BlockRef;
   tx: string;
+  transaction: {
+    hash: string;
+    index: number;
+    logIndex: number;
+  };
   timestamp: Date;
-  offset: Offset;
 };
 
 export class Erc20Stream extends AbstractStream<
   {
     fromBlock: number;
     toBlock?: number;
-    contracts: string[];
+    contracts?: string[];
   },
   Erc20Event
 > {
   async stream(): Promise<ReadableStream<Erc20Event[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
-    const offset = await this.getState({
-      number: args.fromBlock,
-      hash: '',
-    });
-
-    const source = this.portal.getFinalizedStream({
+    const source = await this.getStream({
       type: 'evm',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -62,15 +61,10 @@ export class Erc20Stream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: async ({ blocks }, controller) => {
           // FIXME any
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             return block.logs
               .filter((l: any) => abi_events.Transfer.is(l))
@@ -83,9 +77,13 @@ export class Erc20Stream extends AbstractStream<
                   amount: data.value,
                   token_address: l.address,
                   block: block.header,
+                  transaction: {
+                    hash: l.transactionHash,
+                    index: l.transactionIndex,
+                    logIndex: l.logIndex,
+                  },
                   timestamp: new Date(block.header.timestamp * 1000),
                   tx: l.transactionHash,
-                  offset,
                 };
               });
           });

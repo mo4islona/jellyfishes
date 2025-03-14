@@ -9,7 +9,7 @@ import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
 import { State } from './state';
 import { Progress, TrackProgress } from './track_progress';
-
+import { HttpClient } from '@subsquid/http-client';
 export type Logger = PinoLogger;
 
 export type BlockRef = {
@@ -41,24 +41,41 @@ const logged = new Map();
 
 export type BlockRange = { from: number; to?: number };
 
-export abstract class AbstractStream<
-  Args extends {},
-  Res extends { offset: Offset },
-  DecodedOffset extends { number: number } = { number: number },
-> {
-  protected readonly portal: PortalClient;
+type DecodedOffset = {
+  timestamp: number;
+  number: number;
+  hash: string;
+};
+
+export abstract class AbstractStream<Args extends {}, Res extends {}> {
   logger: Logger;
   progress?: TrackProgress;
 
+  protected readonly portal: PortalClient;
+
+  private offset: DecodedOffset;
   private readonly getLatestOffset: () => Promise<DecodedOffset>;
 
   constructor(protected readonly options: StreamOptions<Args, DecodedOffset>) {
     this.logger =
       options.logger ||
-      pino({base: null, messageKey: 'message', level: process.env.LOG_LEVEL || 'info'});
+      pino({ base: null, messageKey: 'message', level: process.env.LOG_LEVEL || 'info' });
 
     this.portal = new PortalClient(
-      typeof options.portal === 'string' ? {url: options.portal} : options.portal,
+      typeof options.portal === 'string'
+        ? {
+            url: options.portal,
+            http: new HttpClient({
+              retryAttempts: 10,
+            }),
+          }
+        : {
+            ...options.portal,
+            http: new HttpClient({
+              retryAttempts: 10,
+              ...options.portal.http,
+            }),
+          },
     );
 
     // Throttle the head call
@@ -68,15 +85,19 @@ export abstract class AbstractStream<
     this.getLatestOffset = async () => {
       const latest = await headCall.get();
 
-      return {number: latest?.number || 0} as DecodedOffset;
+      return {
+        number: latest?.number || 0,
+        hash: latest?.hash || '',
+        // FIXME extract timestamp from the block?
+        timestamp: 0,
+      };
     };
 
     // Probably, not the best design, but it works for now
     this.initialize();
   }
 
-  initialize() {
-  }
+  initialize() {}
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 
@@ -98,20 +119,43 @@ export abstract class AbstractStream<
    * @param req - The query object containing the parameters for the stream request.
    * @returns A promise that resolves to a ReadableStream of the portal stream data.
    */
-  async getStream<Res extends PortalResponse, Query extends PortalQuery>(
-    req: Query,
-  ): Promise<ReadableStream<PortalStreamData<Res>>> {
+  async getStream<
+    Res extends PortalResponse & {
+      header: { number: number; hash: string; timestamp: number };
+    },
+    Query extends PortalQuery & {
+      fields: { block: { number: boolean; hash: boolean; timestamp: boolean } };
+    },
+  >(req: Query): Promise<ReadableStream<PortalStreamData<Res>>> {
     // Get the last offset from the state
-    const offset = await this.getState({number: req.fromBlock} as DecodedOffset);
+    const offset = await this.getState({ number: req.fromBlock } as DecodedOffset);
 
     // Rewrite the original fromBlock to the last saved offset
     req.fromBlock = offset.number;
+    // Ensure required block fields are present
+    req.fields = {
+      ...req.fields,
+      block: {
+        ...req.fields.block,
+        number: true,
+        hash: true,
+        timestamp: true,
+      },
+    };
 
     const source = this.portal.getStream<Query, Res>(req);
 
     return source.pipeThrough(
       new TransformStream({
         transform: (data, controller) => {
+          const lastBlock = data.blocks[data.blocks.length - 1];
+
+          this.offset = {
+            number: lastBlock.header.number,
+            hash: lastBlock.header.hash,
+            timestamp: lastBlock.header.timestamp,
+          };
+
           controller.enqueue(data);
 
           // Check if the stream is completed
@@ -185,12 +229,9 @@ export abstract class AbstractStream<
    * @param batch - The batch of results processed.
    * @param args - Additional arguments passed to the state saveOffset method.
    */
-  async ack<T extends any[]>(batch: Res[], ...args: T) {
-    // Get last offset
-    const last = batch[batch.length - 1].offset;
-
+  async ack<T extends any[]>(...args: T) {
     // Calculate progress and speed
-    this.progress?.track(this.decodeOffset(last));
+    this.progress?.track(this.offset);
 
     if (!this.options.state) {
       this.warnOnlyOnce(
@@ -205,15 +246,20 @@ export abstract class AbstractStream<
     }
 
     // Save last offset
-    return this.options.state.saveOffset(last, ...args);
+    return this.options.state.saveOffset(this.encodeOffset(this.offset), ...args);
   }
 
-  encodeOffset(offset: any): Offset {
+  encodeOffset(offset: DecodedOffset): Offset {
     return JSON.stringify(offset);
   }
 
   decodeOffset(offset: Offset): DecodedOffset {
-    return JSON.parse(offset);
+    return {
+      timestamp: 0,
+      number: 0,
+      hash: '',
+      ...(JSON.parse(offset) || {}),
+    };
   }
 
   stop() {

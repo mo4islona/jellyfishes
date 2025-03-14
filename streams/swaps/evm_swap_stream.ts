@@ -121,6 +121,7 @@ export class EvmSwapStream extends AbstractStream<Args, EvmSwapOrPoolMetadata> {
               const offset = this.encodeOffset({
                 number: block.header.number,
                 hash: block.header.hash,
+                timestamp: block.header.timestamp,
               });
 
               const blockEvents = block.logs.map((l) => {

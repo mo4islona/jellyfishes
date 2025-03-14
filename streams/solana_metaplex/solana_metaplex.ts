@@ -1,7 +1,7 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
 import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
-import { Instruction, getTransactionHash } from '../solana_swaps/utils';
+import { getTransactionHash, Instruction } from '../solana_swaps/utils';
 import * as metaplex from './abi/metaplex/index';
 
 export type SolanaTokenMetadata = {
@@ -13,7 +13,6 @@ export type SolanaTokenMetadata = {
   isMutable: boolean;
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -26,17 +25,14 @@ export class SolanaTokenMetadataStream extends AbstractStream<
     fromBlock: number;
     toBlock?: number;
   },
-  SolanaTokenMetadata,
-  { number: number; hash: string }
+  SolanaTokenMetadata
 > {
   async stream(): Promise<ReadableStream<SolanaTokenMetadata[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
+      fromBlock: args.fromBlock,
       toBlock: args.toBlock,
       fields: {
         block: {
@@ -82,15 +78,10 @@ export class SolanaTokenMetadataStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             const metadata: SolanaTokenMetadata[] = [];
 
@@ -115,9 +106,8 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: { number: block.header.number, hash: block.header.hash },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV2.d1: {
@@ -133,9 +123,8 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: { number: block.header.number, hash: block.header.hash },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV3.d1: {
@@ -151,9 +140,8 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: { number: block.header.number, hash: block.header.hash },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
               }

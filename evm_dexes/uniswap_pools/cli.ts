@@ -10,12 +10,10 @@ class UniswapPoolCli extends DexPoolCli {
   async run(): Promise<void> {
     await this.initialize();
 
-    const ds = new UniswapPoolStream(
-      this.createStreamOptions('uniswap_sync_status')
-    );
+    const ds = new UniswapPoolStream(this.createStreamOptions('uniswap_sync_status'));
 
     this.db.exec(
-      'CREATE TABLE IF NOT EXISTS uniswap_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, factory_address TEXT)'
+      'CREATE TABLE IF NOT EXISTS uniswap_pools (pool TEXT PRIMARY KEY, token_a TEXT, token_b TEXT, factory_address TEXT)',
     );
 
     const insert = this.db.prepare('INSERT OR IGNORE INTO uniswap_pools VALUES (?, ?, ?, ?)');
