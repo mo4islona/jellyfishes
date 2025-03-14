@@ -1,12 +1,9 @@
 import { TxInfo } from './evm_swap_stream';
 import { PoolMetadataStorage } from './pool_metadata_storage';
 import { EvmSwap } from './evm_swap_stream';
-import { events as UniswapV3SwapsEvents } from './uniswap.v3/swaps';
-import { events as UniswapV3FactoryEvents } from './uniswap.v3/factory';
-import { events as AerodromeFactoryEvents } from './aerodrome/factory';
-import { events as AerodromeSwapEvents } from './aerodrome/swaps';
+import { events as UniswapV2SwapsEvents } from './uniswap.v2/swaps';
 
-export const handleUniswapV3Swap = (
+export const handleUniswapV2Swap = (
   l: any,
   transaction: any,
   txInfo: TxInfo,
@@ -17,21 +14,21 @@ export const handleUniswapV3Swap = (
     return null;
   }
 
-  const data = UniswapV3SwapsEvents.Swap.decode(l);
+  const data = UniswapV2SwapsEvents.Swap.decode(l);
 
   return {
     dexName: 'uniswap',
-    protocol: 'uniswap.v3',
+    protocol: 'uniswap.v2',
     account: transaction.from,
     tokenA: {
       address: poolMetadata?.token_a,
-      amount: data.amount0,
+      amount: data.amount0Out > 0n ? data.amount0Out : data.amount0In,
       sender: data.sender,
     },
     tokenB: {
       address: poolMetadata.token_b,
-      amount: data.amount1,
-      recipient: data.recipient,
+      amount: data.amount1Out > 0n ? data.amount1Out : data.amount1In,
+      recipient: data.to,
     },
     factory: {
       address: poolMetadata?.factory_address,

@@ -1,4 +1,4 @@
-import { TxInfo } from './evm_swap_stream';
+import { TxInfo, EvmSwap } from './evm_swap_stream';
 import { PoolMetadataStorage } from './pool_metadata_storage';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
 export const handleAerodromeSlipstreamSwap = (
@@ -6,7 +6,7 @@ export const handleAerodromeSlipstreamSwap = (
   transaction: any,
   txInfo: TxInfo,
   poolMetadataStorage: PoolMetadataStorage,
-) => {
+): EvmSwap | null => {
   const poolMetadata = poolMetadataStorage.getPoolMetadata(l.address);
   if (!poolMetadata) {
     return null;

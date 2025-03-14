@@ -43,7 +43,7 @@ async function main() {
     args: {
       network: config.network,
       block: {
-        from: config.factory.block.number,
+        from: 13_843_704,
       },
       //factoryContract: config.factory.address,
       /**
@@ -52,19 +52,24 @@ async function main() {
        * and to expand the pool into a list of tokens within it.
        */
       dbPath: config.dbPath,
+      includeSwaps: false,
       dexs: [
+        // {
+        //   dexName: 'uniswap',
+        //   protocol: 'uniswap.v2',
+        // },
         // {
         //   dexName: 'uniswap',
         //   protocol: 'uniswap.v3',
         // },
-        {
-          dexName: 'aerodrome',
-          protocol: 'aerodrome_basic',
-        },
         // {
         //   dexName: 'aerodrome',
-        //   protocol: 'aerodrome_slipstream',
+        //   protocol: 'aerodrome_basic',
         // },
+        {
+          dexName: 'aerodrome',
+          protocol: 'aerodrome_slipstream',
+        },
       ],
     },
     logger,

@@ -5,6 +5,7 @@ import { Network } from 'evm_dexes/config';
 import { uniq } from 'lodash';
 
 import { events as UniswapV3SwapsEvents } from './uniswap.v3/swaps';
+import { events as UniswapV2FactoryEvents } from './uniswap.v2/factory';
 import { events as UniswapV3FactoryEvents } from './uniswap.v3/factory';
 import { events as AerodromeFactoryEvents } from './aerodrome/factory';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
@@ -17,7 +18,7 @@ export type PoolMetadata = {
   token_a: string;
   token_b: string;
   factory_address: string;
-  other_data?: string;
+  block_number: number;
 };
 
 export class PoolMetadataStorage {
@@ -29,11 +30,11 @@ export class PoolMetadataStorage {
     this.db = new DatabaseSync(this.dbPath);
     // this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec(
-      'CREATE TABLE IF NOT EXISTS "evm_pools" (network TEXT, dex_name TEXT, protocol TEXT, pool TEXT, token_a TEXT, token_b TEXT, factory_address TEXT, other_data TEXT, PRIMARY KEY (network, pool))',
+      'CREATE TABLE IF NOT EXISTS "evm_pools" (network TEXT, dex_name TEXT, protocol TEXT, pool TEXT, token_a TEXT, token_b TEXT, factory_address TEXT, block_number INTEGER, PRIMARY KEY (network, pool))',
     );
     this.statements = {
       insert: this.db.prepare(
-        'INSERT OR IGNORE INTO "evm_pools" VALUES (:network, :dex_name, :protocol, :pool, :token_a, :token_b, :factory_address, :other_data)',
+        'INSERT OR IGNORE INTO "evm_pools" VALUES (:network, :dex_name, :protocol, :pool, :token_a, :token_b, :factory_address, :block_number)',
       ),
     };
     this.poolMetadataMap = new Map();
@@ -65,6 +66,20 @@ export class PoolMetadataStorage {
         if (!block.logs) return [];
 
         return block.logs.map((l): PoolMetadata | null => {
+          if (UniswapV2FactoryEvents.PairCreated.is(l)) {
+            const data = UniswapV2FactoryEvents.PairCreated.decode(l);
+            return {
+              network,
+              pool: data.pair,
+              token_a: data.token0,
+              token_b: data.token1,
+              factory_address: l.address,
+              dex_name: 'uniswap',
+              protocol: 'uniswap.v2',
+              block_number: block.header.number,
+            } satisfies PoolMetadata;
+          }
+
           if (UniswapV3FactoryEvents.PoolCreated.is(l)) {
             const data = UniswapV3FactoryEvents.PoolCreated.decode(l);
             return {
@@ -75,6 +90,7 @@ export class PoolMetadataStorage {
               factory_address: l.address,
               dex_name: 'uniswap',
               protocol: 'uniswap.v3',
+              block_number: block.header.number,
             } satisfies PoolMetadata;
           }
 
@@ -88,7 +104,7 @@ export class PoolMetadataStorage {
               factory_address: l.address,
               dex_name: 'aerodrome',
               protocol: 'aerodrome_basic',
-              other_data: 'BasicPool',
+              block_number: block.header.number,
             } satisfies PoolMetadata;
           }
 
@@ -102,7 +118,7 @@ export class PoolMetadataStorage {
               factory_address: l.address,
               dex_name: 'aerodrome',
               protocol: 'aerodrome_slipstream',
-              other_data: 'CLPool',
+              block_number: block.header.number,
             } satisfies PoolMetadata;
           }
           return null;

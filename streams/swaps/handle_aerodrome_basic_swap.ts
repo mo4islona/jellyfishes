@@ -2,7 +2,7 @@ import { events as UniswapV3SwapsEvents } from './uniswap.v3/swaps';
 import { events as UniswapV3FactoryEvents } from './uniswap.v3/factory';
 import { events as AerodromeFactoryEvents } from './aerodrome/factory';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
-import { TxInfo } from './evm_swap_stream';
+import { TxInfo, EvmSwap } from './evm_swap_stream';
 import { PoolMetadataStorage } from './pool_metadata_storage';
 
 export const handleAerodromeBasicSwap = (
@@ -10,7 +10,7 @@ export const handleAerodromeBasicSwap = (
   transaction: any,
   txInfo: TxInfo,
   poolMetadataStorage: PoolMetadataStorage,
-) => {
+): EvmSwap | null => {
   const poolMetadata = poolMetadataStorage.getPoolMetadata(l.address);
   if (!poolMetadata) {
     return null;

@@ -1,19 +1,22 @@
 import { AbstractStream, BlockRange, BlockRef, Offset } from '../../core/abstract_stream';
 import { events as UniswapV3SwapsEvents } from './uniswap.v3/swaps';
-import { events as UniswapV3FactoryEvents } from './uniswap.v3/factory';
-import { events as AerodromeFactoryEvents } from './aerodrome/factory';
+import { events as UniswapV2SwapsEvents } from './uniswap.v2/swaps';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
-import { DatabaseSync, StatementSync } from 'node:sqlite';
-import { uniq } from 'lodash';
 import { Network } from '../../evm_dexes/config';
 import { dexToLogs } from './dexs_to_logs';
 import { PoolMetadataStorage } from './pool_metadata_storage';
 import { handleUniswapV3Swap } from './handle_uniswap_v3_swap';
 import { handleAerodromeBasicSwap } from './handle_aerodrome_basic_swap';
 import { handleAerodromeSlipstreamSwap } from './handle_aerodrome_slipstream_swap';
+import { handleUniswapV2Swap } from './handle_uniswap_v2_swap';
 
 export const DexNameValues = ['uniswap', 'aerodrome'] as const;
-export const ProtocolValues = ['uniswap.v3', 'aerodrome_basic', 'aerodrome_slipstream'] as const;
+export const ProtocolValues = [
+  'uniswap.v3',
+  'uniswap.v2',
+  'aerodrome_basic',
+  'aerodrome_slipstream',
+] as const;
 
 export type Protocol = (typeof ProtocolValues)[number];
 export type DexName = (typeof DexNameValues)[number];
@@ -62,7 +65,7 @@ export type EvmSwap = {
 type Args = {
   network: Network;
   block: BlockRange;
-  //factoryContract?: string;
+  includeSwaps?: boolean;
   dbPath: string;
   dexs: Dex[];
 };
@@ -76,8 +79,7 @@ export class EvmSwapStream extends AbstractStream<Args, EvmSwap> {
 
   async stream(): Promise<ReadableStream<EvmSwap[]>> {
     const { args } = this.options;
-
-    const logs = args.dexs.flatMap((dex) => dexToLogs(dex, args.network));
+    const logs = args.dexs.flatMap((dex) => dexToLogs(dex, args.network, args.includeSwaps));
 
     const source = await this.getStream({
       type: 'evm',
@@ -111,6 +113,10 @@ export class EvmSwapStream extends AbstractStream<Args, EvmSwap> {
         transform: ({ blocks }, controller) => {
           this.poolMetadataStorage.savePoolMetadataIntoDb(blocks, args.network);
 
+          if (!args.includeSwaps) {
+            return;
+          }
+
           // FIXME
           const events = blocks
             .flatMap((block: any) => {
@@ -136,6 +142,10 @@ export class EvmSwapStream extends AbstractStream<Args, EvmSwap> {
                   timestamp: new Date(block.header.timestamp * 1000),
                   offset,
                 };
+
+                if (UniswapV2SwapsEvents.Swap.is(l)) {
+                  return handleUniswapV2Swap(l, transaction, txInfo, this.poolMetadataStorage);
+                }
 
                 if (UniswapV3SwapsEvents.Swap.is(l)) {
                   return handleUniswapV3Swap(l, transaction, txInfo, this.poolMetadataStorage);
