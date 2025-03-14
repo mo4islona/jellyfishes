@@ -11,16 +11,6 @@ import {
 import { getSortFunction } from './util';
 import * as process from 'node:process';
 
-const DECIMALS = {
-  So11111111111111111111111111111111111111112: 9,
-};
-
-function denominate(amount: bigint, mint: string) {
-  const decimals = DECIMALS[mint] || 6;
-
-  return Number(amount) / 10 ** decimals;
-}
-
 const TRACKED_TOKENS = [
   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
   'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
