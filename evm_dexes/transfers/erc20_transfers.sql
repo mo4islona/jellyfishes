@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS evm_erc20_transfers
 --
 -- ############################################################################################################
 
---  Daily resolution for all historical data
+--  Monthly resolution for all historical data
 
-CREATE TABLE IF NOT EXISTS evm_swaps_daily_volumes
+CREATE TABLE IF NOT EXISTS evm_erc20_monthly_transfers
 (
     timestamp DateTime CODEC (DoubleDelta, ZSTD),
     account   String,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS evm_swaps_daily_volumes
     amount    Int128
 ) ENGINE = SummingMergeTree() ORDER BY (timestamp, token, account);
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_daily_volumes_mva TO evm_swaps_daily_volumes AS
-SELECT toStartOfDay(timestamp) as timestamp,
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_monthly_transfers_mva TO evm_erc20_monthly_transfers AS
+SELECT toStartOfMonth(timestamp) as timestamp,
        "from"                  as account,
        token                   as token,
        sum(-amount * sign)     as amount,
@@ -40,8 +40,8 @@ SELECT toStartOfDay(timestamp) as timestamp,
 FROM evm_erc20_transfers
 GROUP BY timestamp, token, "from";
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_daily_volumes_mvb TO evm_swaps_daily_volumes AS
-SELECT toStartOfDay(timestamp) as timestamp,
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_monthly_transfers_mvb TO evm_erc20_monthly_transfers AS
+SELECT toStartOfMonth(timestamp) as timestamp,
        "to"                    as account,
        token                   as token,
        sum(amount * sign)      as amount,
@@ -51,7 +51,7 @@ GROUP BY timestamp, token, "to";
 
 --  5 min resolution for last N day
 
-CREATE TABLE IF NOT EXISTS evm_swaps_5m_volumes
+CREATE TABLE IF NOT EXISTS evm_erc20_5m_transfers
 (
     timestamp DateTime CODEC (DoubleDelta, ZSTD),
     account   String,
@@ -60,9 +60,9 @@ CREATE TABLE IF NOT EXISTS evm_swaps_5m_volumes
     amount    Int128
 ) ENGINE = SummingMergeTree()
     ORDER BY (timestamp, token, account)
-    TTL timestamp + INTERVAL 30 DAY;
+    TTL timestamp + INTERVAL 45 DAY;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_5m_volumes_mva TO evm_swaps_5m_volumes AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_5m_transfers_mva TO evm_erc20_5m_transfers AS
 SELECT toStartOfFiveMinutes(timestamp) as timestamp,
        "from"                          as account,
        token                           as token,
@@ -71,7 +71,7 @@ SELECT toStartOfFiveMinutes(timestamp) as timestamp,
 FROM evm_erc20_transfers
 GROUP BY timestamp, token, "from";
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_5m_volumes_mvb TO evm_swaps_5m_volumes AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_5m_transfers_mvb TO evm_erc20_5m_transfers AS
 SELECT toStartOfFiveMinutes(timestamp) as timestamp,
        "to"                            as account,
        token                           as token,

@@ -143,6 +143,7 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
     req.fromBlock = offset.number;
 
     if (req.toBlock) {
+      this.toBlock = req.toBlock;
     }
     // Ensure required block fields are present
     req.fields = {

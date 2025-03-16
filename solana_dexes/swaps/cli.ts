@@ -27,7 +27,7 @@ async function main() {
     portal: 'https://portal.sqd.dev/datasets/solana-beta',
     args: {
       fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 317617480,
-      // type: ['orca_whirlpool'],
+      type: ['orca_whirlpool'],
       // fromBlock: 300279448,
       // toBlock: 300279448,
       // fromBlock: 269021917,
