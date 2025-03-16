@@ -7,8 +7,9 @@ import {
   ensureTables,
   toUnixTime,
 } from '../../solana_dexes/clickhouse';
-import { UniswapSwapStream } from '../../streams/uniswap_swaps/uniswap_swap_stream';
+import { EvmSwapStream } from '../../streams/swaps/evm_swap_stream';
 import { getConfig } from '../config';
+import { PoolMetadataStorage } from '../../streams/swaps/pool_metadata_storage';
 
 const DECIMALS = {
   'base-mainnet': {
@@ -30,40 +31,66 @@ function denominate(network: string, address: string, amount: bigint) {
 const config = getConfig();
 
 const clickhouse = createClickhouseClient();
-const logger = createLogger('unswap.v3 swaps').child({network: config.network});
+
+const logger = createLogger('evm dex swaps').child({ network: config.network });
 
 logger.info(`Local database: ${config.dbPath}`);
 
 async function main() {
-  const ds = new UniswapSwapStream({
+  await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
+
+  const poolMetadataStorage = new PoolMetadataStorage(config.dbPath, config.network);
+
+  const ds = new EvmSwapStream({
     portal: config.portal.url,
     args: {
+      poolMetadataStorage,
+      network: config.network,
       block: {
-        from: config.factory.block.number,
+        from: 24_968_076,
       },
-      factoryContract: config.factory.address,
+      //factoryContract: config.factory.address,
       /**
        * Pool metadata is stored in a local SQLite database.
        * We need metadata to filter out pools that are not interesting to us
        * and to expand the pool into a list of tokens within it.
        */
       dbPath: config.dbPath,
+      includeSwaps: true,
+      dexs: [
+        {
+          dexName: 'uniswap',
+          protocol: 'uniswap.v2',
+        },
+        {
+          dexName: 'uniswap',
+          protocol: 'uniswap.v3',
+        },
+        {
+          dexName: 'aerodrome',
+          protocol: 'aerodrome_basic',
+        },
+        {
+          dexName: 'aerodrome',
+          protocol: 'aerodrome_slipstream',
+        },
+      ],
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
       id: `swaps-${config.network}-v2`,
     }),
-    onStart: async ({current, initial}) => {
+    onStart: async ({ current, initial }) => {
       /**
        * Clean all data before the current offset.
        * There is a small chance if the stream is interrupted, the data will be duplicated.
        * We just clean it up at the start to avoid duplicates.
        */
       await cleanAllBeforeOffset(
-        {clickhouse, logger},
+        { clickhouse, logger },
         {
-          table: 'uniswap_v3_swaps_raw_v2',
+          table: 'evm_swaps_raw',
           column: 'timestamp',
           offset: current.timestamp,
           filter: `network = '${config.network}'`,
@@ -78,7 +105,7 @@ async function main() {
 
       logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
     },
-    onProgress: ({state, interval}) => {
+    onProgress: ({ state, interval }) => {
       logger.info({
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
         speed: `${interval.processedPerSecond} blocks/second`,
@@ -86,15 +113,16 @@ async function main() {
     },
   });
 
-  await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
-
-  for await (const swaps of await ds.stream()) {
+  for await (const swapsOrPoolMetadata of await ds.stream()) {
+    const swaps = swapsOrPoolMetadata.filter((s) => 'tokenA' in s);
     await clickhouse.insert({
-      table: 'uniswap_v3_swaps_raw_v2',
+      table: 'evm_swaps_raw',
       values: swaps.map((s) => {
-        return {
+        const res = {
           factory_address: s.factory.address,
           network: config.network,
+          dex_name: s.dexName,
+          protocol: s.protocol,
           block_number: s.block.number,
           transaction_hash: s.transaction.hash,
           transaction_index: s.transaction.index,
@@ -102,16 +130,19 @@ async function main() {
           account: s.account,
           token_a: s.tokenA.address,
           token_b: s.tokenB.address,
+          amount_a_raw: s.tokenA.amount.toString(),
+          amount_b_raw: s.tokenB.amount.toString(),
           amount_a: denominate(config.network, s.tokenA.address || '', s.tokenA.amount).toString(),
           amount_b: denominate(config.network, s.tokenB.address || '', s.tokenB.amount).toString(),
           timestamp: toUnixTime(s.timestamp),
           sign: 1,
         };
+
+        return res;
       }),
       format: 'JSONEachRow',
     });
-
-    await ds.ack(swaps);
+    await ds.ack(swapsOrPoolMetadata);
   }
 }
 

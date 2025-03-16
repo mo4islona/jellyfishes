@@ -9,7 +9,7 @@ import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
 import { State } from './state';
 import { Progress, TrackProgress } from './track_progress';
-
+import { HttpClient } from '@subsquid/http-client';
 export type Logger = PinoLogger;
 
 export type BlockRef = {
@@ -59,23 +59,23 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
   constructor(protected readonly options: StreamOptions<Args, DecodedOffset>) {
     this.logger =
       options.logger ||
-      pino({base: null, messageKey: 'message', level: process.env.LOG_LEVEL || 'info'});
+      pino({ base: null, messageKey: 'message', level: process.env.LOG_LEVEL || 'info' });
 
     this.portal = new PortalClient(
       typeof options.portal === 'string'
         ? {
-          url: options.portal,
-          http: {
-            retryAttempts: 10,
-          },
-        }
+            url: options.portal,
+            http: new HttpClient({
+              retryAttempts: 10,
+            }),
+          }
         : {
-          ...options.portal,
-          http: {
-            retryAttempts: 10,
-            ...options.portal.http,
+            ...options.portal,
+            http: new HttpClient({
+              retryAttempts: 10,
+              ...options.portal.http,
+            }),
           },
-        },
     );
 
     // Throttle the head call
@@ -97,8 +97,7 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
     this.initialize();
   }
 
-  initialize() {
-  }
+  initialize() {}
 
   abstract stream(): Promise<ReadableStream<Res[]>>;
 
@@ -129,7 +128,7 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
     },
   >(req: Query): Promise<ReadableStream<PortalStreamData<Res>>> {
     // Get the last offset from the state
-    const offset = await this.getState({number: req.fromBlock} as DecodedOffset);
+    const offset = await this.getState({ number: req.fromBlock } as DecodedOffset);
 
     // Rewrite the original fromBlock to the last saved offset
     req.fromBlock = offset.number;
