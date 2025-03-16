@@ -1,22 +1,17 @@
 import { DatabaseSync, StatementSync } from 'node:sqlite';
-import { DexName } from './evm_swap_stream';
-import { Protocol } from './evm_swap_stream';
-import { Network } from 'evm_dexes/config';
 import { uniq } from 'lodash';
-
-import { Offset } from 'core/abstract_stream';
+import { DexName, DexProtocol } from './evm_swap_stream';
+import { Network } from './networks';
 
 export type PoolMetadata = {
   network: Network;
   dex_name: DexName;
-  protocol: Protocol;
+  protocol: DexProtocol;
   pool: string;
   token_a: string;
   token_b: string;
   factory_address: string;
   block_number: number;
-
-  offset: Offset;
 };
 
 export class PoolMetadataStorage {
@@ -41,6 +36,7 @@ export class PoolMetadataStorage {
     this.poolMetadataMap = new Map();
   }
 
+  // FIXME rewrite for batch fetch
   getPoolMetadata(pool: string): PoolMetadata | undefined {
     let poolMetadata = this.poolMetadataMap.get(pool);
     if (!poolMetadata) {
@@ -57,14 +53,9 @@ export class PoolMetadataStorage {
     return poolMetadata;
   }
 
-  setPoolMetadata(pool: string, metadata: PoolMetadata) {
-    this.poolMetadataMap.set(pool, metadata);
-  }
-
   savePoolMetadataIntoDb(poolMetadata: PoolMetadata[]) {
     for (const pool of poolMetadata) {
-      const { offset, ...rest } = pool;
-      this.statements.insert.run(rest);
+      this.statements.insert.run(pool);
       this.poolMetadataMap.set(pool.pool, pool);
     }
   }

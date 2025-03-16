@@ -9,7 +9,6 @@ import {
 } from '../../solana_dexes/clickhouse';
 import { EvmSwapStream } from '../../streams/swaps/evm_swap_stream';
 import { getConfig } from '../config';
-import { PoolMetadataStorage } from '../../streams/swaps/pool_metadata_storage';
 
 const DECIMALS = {
   'base-mainnet': {
@@ -36,50 +35,46 @@ const logger = createLogger('evm dex swaps').child({ network: config.network });
 
 logger.info(`Local database: ${config.dbPath}`);
 
+function blockNumber(block: number | string) {
+  if (typeof block === 'string') {
+    /**
+     * Remove commas and underscores
+     * 1_000_000 -> 1000000
+     * 1,000,000 -> 1000000
+     */
+    const value = Number(block.replace(/[_,]/g, ''));
+    if (isNaN(value)) {
+      throw new Error(`Block ${block} is not a number`);
+    }
+
+    return value;
+  }
+
+  return block;
+}
 async function main() {
   await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
-
-  const poolMetadataStorage = new PoolMetadataStorage(config.dbPath, config.network);
 
   const ds = new EvmSwapStream({
     portal: config.portal.url,
     args: {
-      poolMetadataStorage,
       network: config.network,
       block: {
-        from: 24_968_076,
+        from: process.env.BLOCK_FROM ? blockNumber(process.env.BLOCK_FROM) : 0,
+        to: process.env.BLOCK_TO ? blockNumber(process.env.BLOCK_TO) : undefined,
       },
-      //factoryContract: config.factory.address,
       /**
        * Pool metadata is stored in a local SQLite database.
        * We need metadata to filter out pools that are not interesting to us
        * and to expand the pool into a list of tokens within it.
        */
       dbPath: config.dbPath,
-      includeSwaps: true,
-      dexs: [
-        {
-          dexName: 'uniswap',
-          protocol: 'uniswap.v2',
-        },
-        {
-          dexName: 'uniswap',
-          protocol: 'uniswap.v3',
-        },
-        {
-          dexName: 'aerodrome',
-          protocol: 'aerodrome_basic',
-        },
-        {
-          dexName: 'aerodrome',
-          protocol: 'aerodrome_slipstream',
-        },
-      ],
+      onlyPools: !!process.env.BLOCK_TO,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
-      id: `swaps-${config.network}-v2`,
+      id: `evm-swaps-${config.network}${!!process.env.BLOCK_TO ? '-pools' : ''}`,
     }),
     onStart: async ({ current, initial }) => {
       /**
@@ -101,6 +96,7 @@ async function main() {
         logger.info(`Syncing from ${formatNumber(current.number)}`);
         return;
       }
+
       const ts = new Date(current.timestamp * 1000);
 
       logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
@@ -113,12 +109,11 @@ async function main() {
     },
   });
 
-  for await (const swapsOrPoolMetadata of await ds.stream()) {
-    const swaps = swapsOrPoolMetadata.filter((s) => 'tokenA' in s);
+  for await (const swaps of await ds.stream()) {
     await clickhouse.insert({
       table: 'evm_swaps_raw',
       values: swaps.map((s) => {
-        const res = {
+        return {
           factory_address: s.factory.address,
           network: config.network,
           dex_name: s.dexName,
@@ -137,12 +132,10 @@ async function main() {
           timestamp: toUnixTime(s.timestamp),
           sign: 1,
         };
-
-        return res;
       }),
       format: 'JSONEachRow',
     });
-    await ds.ack(swapsOrPoolMetadata);
+    await ds.ack();
   }
 }
 

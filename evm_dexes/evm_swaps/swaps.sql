@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
     protocol            LowCardinality(String),
     token_a             String,
     token_b             String,
-    amount_a_raw        Int256,
-    amount_b_raw        Int256,
+    amount_a_raw        Int128,
+    amount_b_raw        Int128,
     amount_a            Float64,
     amount_b            Float64,
     account             String,
@@ -20,8 +20,6 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
 ) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp) -- DATA WILL BE SPLIT BY MONTH
       ORDER BY (timestamp, transaction_index, log_index);
-
-
 
 -- ############################################################################################################
 --
@@ -35,7 +33,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS eth_amounts_mv
     usdc_amount Float64
 ) ENGINE SummingMergeTree() ORDER BY (timestamp, network) POPULATE
 AS
-SELECT toStartOfMinute(timestamp),
+SELECT toStartOfMinute(timestamp) as timestamp,
        network,
        CASE
            WHEN token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
@@ -83,34 +81,3 @@ SELECT timestamp,
 from evm_swaps_raw
 WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
    OR token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
-
--- ############################################################################################################
---
--- ############################################################################################################
-
-CREATE TABLE IF NOT EXISTS evm_token_daily_swaps_volumes
-(
-    timestamp DateTime,
-    account   String,
-    token     String,
-    count     UInt32,
-    amount    Float64
-) ENGINE = SummingMergeTree() ORDER BY (timestamp, token, account);
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_daily_swaps_volumes_mva TO evm_token_daily_swaps_volumes AS
-SELECT toStartOfFiveMinutes(timestamp)                  as timestamp,
-       account,
-       token_a                                  as token,
-       sum(amount_a * sign) as amount,
-       sum(sign) as count
-FROM evm_swaps_raw
-GROUP BY timestamp, token, account;
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_daily_swaps_volumes_mvb TO evm_token_daily_swaps_volumes AS
-SELECT toStartOfDay(timestamp)                  as timestamp,
-       account,
-       token_b                                  as token,
-       sum(amount_b * sign) as amount,
-       sum(sign) as count
-FROM evm_swaps_raw
-GROUP BY timestamp, token, account;

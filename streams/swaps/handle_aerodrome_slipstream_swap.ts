@@ -1,39 +1,19 @@
-import { TxInfo, EvmSwap } from './evm_swap_stream';
-import { PoolMetadataStorage } from './pool_metadata_storage';
+import { DecodedEvmSwap } from './evm_swap_stream';
 import { events as AerodromeSwapEvents } from './aerodrome/swaps';
-export const handleAerodromeSlipstreamSwap = (
-  l: any,
-  transaction: any,
-  txInfo: TxInfo,
-  poolMetadataStorage: PoolMetadataStorage,
-): EvmSwap | null => {
-  const poolMetadata = poolMetadataStorage.getPoolMetadata(l.address);
-  if (!poolMetadata) {
-    return null;
-  }
 
-  const data = AerodromeSwapEvents.SlipstreamPoolSwap.decode(l);
+export const handleAerodromeSlipstreamSwap = (log: any): DecodedEvmSwap | null => {
+  const data = AerodromeSwapEvents.SlipstreamPoolSwap.decode(log);
 
   return {
     dexName: 'aerodrome',
     protocol: 'aerodrome_slipstream',
-    account: transaction.from,
-    tokenA: {
-      address: poolMetadata.token_a,
+    from: {
       amount: data.amount0,
       sender: data.sender,
     },
-    tokenB: {
-      address: poolMetadata.token_b,
+    to: {
       amount: data.amount1,
       recipient: data.recipient,
     },
-    pool: {
-      address: l.address,
-    },
-    factory: {
-      address: poolMetadata.factory_address,
-    },
-    ...txInfo,
   };
 };

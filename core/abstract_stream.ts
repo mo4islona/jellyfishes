@@ -54,6 +54,7 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
   protected readonly portal: PortalClient;
 
   private offset: DecodedOffset;
+  private toBlock: number | undefined;
   private readonly getLatestOffset: () => Promise<DecodedOffset>;
 
   constructor(protected readonly options: StreamOptions<Args, DecodedOffset>) {
@@ -65,16 +66,16 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
       typeof options.portal === 'string'
         ? {
             url: options.portal,
-            http: new HttpClient({
+            http: {
               retryAttempts: 10,
-            }),
+            },
           }
         : {
             ...options.portal,
-            http: new HttpClient({
+            http: {
               retryAttempts: 10,
               ...options.portal.http,
-            }),
+            },
           },
     );
 
@@ -83,6 +84,14 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
 
     // Get the latest offset
     this.getLatestOffset = async () => {
+      if (this.toBlock) {
+        return {
+          number: this.toBlock,
+          hash: '',
+          timestamp: 0,
+        };
+      }
+
       const latest = await headCall.get();
 
       return {
@@ -132,6 +141,9 @@ export abstract class AbstractStream<Args extends {}, Res extends {}> {
 
     // Rewrite the original fromBlock to the last saved offset
     req.fromBlock = offset.number;
+
+    if (req.toBlock) {
+    }
     // Ensure required block fields are present
     req.fields = {
       ...req.fields,

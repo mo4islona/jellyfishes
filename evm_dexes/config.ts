@@ -1,10 +1,8 @@
 import dotenv from 'dotenv';
 
+import { Network } from '../streams/swaps/networks';
+
 dotenv.config();
-
-export const NetworkValues = ['base-mainnet', 'ethereum-mainnet'] as const;
-
-export type Network = (typeof NetworkValues)[number];
 
 export const CONTRACTS = {
   factory: {
