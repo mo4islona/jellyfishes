@@ -1,22 +1,18 @@
-CREATE TABLE IF NOT EXISTS evm_swaps_raw
+CREATE TABLE IF NOT EXISTS uniswap_v3_swaps_raw_v2
 (
-    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
-    factory_address     LowCardinality(String),
-    network             LowCardinality(String),
-    dex_name            LowCardinality(String),
-    protocol            LowCardinality(String),
-    token_a             String,
-    token_b             String,
-    amount_a_raw        Int256,
-    amount_b_raw        Int256,
-    amount_a            Float64,
-    amount_b            Float64,
-    account             String,
-    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
-    transaction_index   UInt16,
-    log_index           UInt16,
-    transaction_hash    String,
-    sign                Int8
+    timestamp         DateTime CODEC (DoubleDelta, ZSTD),
+    factory_address   LowCardinality(String),
+    network           LowCardinality(String),
+    token_a           String,
+    token_b           String,
+    amount_a          Float64,
+    amount_b          Float64,
+    account           String,
+    block_number      UInt32 CODEC (DoubleDelta, ZSTD),
+    transaction_index UInt16,
+    log_index         UInt16,
+    transaction_hash  String,
+    sign              Int8
 ) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp) -- DATA WILL BE SPLIT BY MONTH
       ORDER BY (timestamp, transaction_index, log_index);
@@ -47,7 +43,7 @@ SELECT toStartOfMinute(timestamp),
                THEN abs(amount_b) * sign
            ELSE abs(amount_a) * sign
            END as usdc_amount
-from evm_swaps_raw
+from uniswap_v3_swaps_raw_v2
 WHERE (
     token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
         AND token_b IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
@@ -80,7 +76,7 @@ SELECT timestamp,
            ELSE abs(amount_a / amount_b)
            END as price,
        sign
-from evm_swaps_raw
+from uniswap_v3_swaps_raw_v2
 WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
    OR token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
 
@@ -103,7 +99,7 @@ SELECT toStartOfFiveMinutes(timestamp)                  as timestamp,
        token_a                                  as token,
        sum(amount_a * sign) as amount,
        sum(sign) as count
-FROM evm_swaps_raw
+FROM uniswap_v3_swaps_raw_v2
 GROUP BY timestamp, token, account;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_daily_swaps_volumes_mvb TO evm_token_daily_swaps_volumes AS
@@ -112,5 +108,5 @@ SELECT toStartOfDay(timestamp)                  as timestamp,
        token_b                                  as token,
        sum(amount_b * sign) as amount,
        sum(sign) as count
-FROM evm_swaps_raw
+FROM uniswap_v3_swaps_raw_v2
 GROUP BY timestamp, token, account;
