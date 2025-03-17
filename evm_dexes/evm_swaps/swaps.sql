@@ -86,36 +86,36 @@ WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223f
 CREATE MATERIALIZED VIEW IF NOT EXISTS token_volume_5min_mv
 (
     timestamp DateTime,
-    dex_name String,
     token_address String,
+    dex_name String,
     volume UInt256
 ) ENGINE = SummingMergeTree()
-ORDER BY (timestamp, dex_name, token_address)
+ORDER BY (timestamp, token_address, dex_name)
 POPULATE
 AS
 SELECT
 	toStartOfFiveMinutes(timestamp) AS timestamp,
-	dex_name,
 	token_address,
+	dex_name,
 	SUM(volume) AS volume
 FROM (
 	SELECT
 	    toStartOfFiveMinutes(timestamp) AS timestamp,
-	    dex_name,
 	    token_a AS token_address,
+	   	dex_name,
 	    ABS(amount_a_raw) AS volume
 	FROM evm_swaps_raw
 	UNION ALL
 	
 	SELECT
-	    toStartOfFiveMinutes(timestamp) AS timestamp,
-	    dex_name,
+	    toStartOfFiveMinutes(timestamp) AS timestamp,	    
 	    token_b AS token_address,
+	    dex_name,
 	    ABS(amount_b_raw) AS volume
 	FROM evm_swaps_raw	
 )
 GROUP BY
     timestamp,
-    dex_name,
-    token_address
-ORDER BY timestamp, dex_name;
+    token_address,
+    dex_name
+ORDER BY timestamp, token_address, dex_name;
