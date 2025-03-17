@@ -25,13 +25,16 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
 --
 -- ############################################################################################################
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS eth_amounts_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_eth_amounts_mv
 (
-    timestamp DateTime,
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
     network LowCardinality(String),
     eth_amount Float64,
     usdc_amount Float64
-) ENGINE SummingMergeTree() ORDER BY (timestamp, network) POPULATE
+) ENGINE SummingMergeTree()
+    ORDER BY (timestamp, network)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
 AS
 SELECT toStartOfMinute(timestamp) as timestamp,
        network,
@@ -56,14 +59,17 @@ WHERE (
     );
 --
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS base_eth_prices_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_base_eth_prices_mv
 (
-    timestamp DateTime,
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
     network LowCardinality(String),
-    token String,
+    token_address String,
     price Float64,
     sign Int8
-) ENGINE CollapsingMergeTree(sign) ORDER BY (timestamp, token, network) POPULATE
+) ENGINE CollapsingMergeTree(sign)
+    ORDER BY (timestamp, token_address, network)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
 AS
 SELECT timestamp,
        network,
@@ -71,7 +77,7 @@ SELECT timestamp,
            WHEN token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
                THEN token_b
            ELSE token_a
-           END as token,
+           END as token_address,
        CASE
            WHEN token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
                THEN abs(amount_b / amount_a)
@@ -81,3 +87,49 @@ SELECT timestamp,
 from evm_swaps_raw
 WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
    OR token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
+
+-- ############################################################################################################
+--
+-- ############################################################################################################
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_5min_volumes_mv
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    dex_name LowCardinality(String),
+    token_address String,
+    volume UInt256
+) ENGINE = SummingMergeTree()
+    ORDER BY (timestamp, token_address, dex_name)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
+AS
+SELECT
+    toStartOfFiveMinutes(timestamp) AS timestamp,
+    dex_name,
+    token_address,
+    SUM(volume) AS volume
+FROM (
+     SELECT
+         toStartOfFiveMinutes(timestamp) AS timestamp,
+         dex_name,
+         token_a AS token_address,
+         ABS(amount_a_raw) AS volume
+     FROM evm_swaps_raw
+     UNION ALL
+     SELECT
+         toStartOfFiveMinutes(timestamp) AS timestamp,
+         dex_name,
+         token_b AS token_address,
+         ABS(amount_b_raw) AS volume
+     FROM evm_swaps_raw
+)
+GROUP BY
+    timestamp,
+    dex_name,
+    token_address;
+
+
+
+
+
+
