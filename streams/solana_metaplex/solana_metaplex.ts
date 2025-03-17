@@ -1,7 +1,7 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
-import { getTransactionHash, Instruction } from '../solana_swaps/utils';
+import { BlockRef, PortalAbstractStream, TransactionRef } from '../../core/portal_abstract_stream';
+import { Instruction, getTransactionHash } from '../solana_swaps/utils';
 import * as metaplex from './abi/metaplex/index';
 
 export type SolanaTokenMetadata = {
@@ -20,20 +20,10 @@ export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
 }
 
-export class SolanaTokenMetadataStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
-  },
-  SolanaTokenMetadata
-> {
+export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenMetadata> {
   async stream(): Promise<ReadableStream<SolanaTokenMetadata[]>> {
-    const { args } = this.options;
-
     const source = await this.getStream({
       type: 'solana',
-      fromBlock: args.fromBlock,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,

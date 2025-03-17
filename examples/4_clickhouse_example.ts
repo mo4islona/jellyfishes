@@ -1,6 +1,6 @@
 import { createClient } from '@clickhouse/client';
 import { ClickhouseState } from '../core/states/clickhouse_state';
-import { Erc20Stream } from '../streams/erc20/erc20_stream';
+import { Erc20Stream } from '../streams/evm_erc20/erc20_stream';
 import { createLogger, formatNumber } from './utils';
 
 async function main() {
@@ -19,8 +19,10 @@ async function main() {
    */
   const dataSource = new Erc20Stream({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+    range: {
+      from: 4634748,
+    },
     args: {
-      fromBlock: 4634748,
       contracts: ['0xdac17f958d2ee523a2206206994597c13d831ec7'],
     },
     logger,
@@ -37,7 +39,7 @@ async function main() {
      * Track the progress of the streaming process.
      * It will simply log the current block number, the head block number, and the speed of the process every 5 seconds.
      */
-    onProgress: ({state, interval}) => {
+    onProgress: ({ state, interval }) => {
       logger.info({
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
         speed: `${interval.processedPerSecond} blocks/second`,

@@ -1,6 +1,6 @@
 import { ClickHouseError } from '@clickhouse/client';
 import { NodeClickHouseClient } from '@clickhouse/client/dist/client';
-import { Offset } from '../abstract_stream';
+import { Offset } from '../portal_abstract_stream';
 import { AbstractState, State } from '../state';
 
 const table = (table: string) => `
@@ -58,7 +58,7 @@ export class ClickhouseState extends AbstractState implements State {
                 WHERE id = {id:String}
                 LIMIT 1`,
         format: 'JSONEachRow',
-        query_params: {id: this.options.id},
+        query_params: { id: this.options.id },
       });
 
       const [row] = await res.json<{ initial: string; offset: string }>();
@@ -66,7 +66,7 @@ export class ClickhouseState extends AbstractState implements State {
       if (row) {
         this.initial = row.initial;
 
-        return {current: row.offset, initial: row.initial};
+        return { current: row.offset, initial: row.initial };
       } else {
         this.initial = defaultValue;
         await this.saveOffset(defaultValue);

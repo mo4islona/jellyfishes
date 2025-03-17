@@ -1,6 +1,6 @@
-import { Offset } from '../abstract_stream';
-import { AbstractState, State } from '../state';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
+import { Offset } from '../portal_abstract_stream';
+import { AbstractState, State } from '../state';
 
 type Options = { network?: string; table: string };
 
@@ -60,7 +60,7 @@ export class SqliteState extends AbstractState implements State {
   }
 
   async saveOffset(offset: Offset) {
-    const res = this.statements.update.run({current: offset, id: this.options.network});
+    const res = this.statements.update.run({ current: offset, id: this.options.network });
 
     if (res.changes === 0) {
       throw new Error(
@@ -70,7 +70,7 @@ export class SqliteState extends AbstractState implements State {
   }
 
   async getOffset(defaultValue: Offset) {
-    const row = this.statements.select.get({id: this.options.network}) as
+    const row = this.statements.select.get({ id: this.options.network }) as
       | { initial: string; current: string }
       | undefined;
 
@@ -84,6 +84,6 @@ export class SqliteState extends AbstractState implements State {
 
     await this.saveOffset(defaultValue);
 
-    return {current: defaultValue, initial: defaultValue};
+    return { current: defaultValue, initial: defaultValue };
   }
 }

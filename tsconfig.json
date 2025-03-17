@@ -6,7 +6,6 @@
     "sourceMap": true,
     "outDir": "dist",
     "importHelpers": true,
-    "types": ["vitest/globals"],
     "strict": true,
     "allowJs": true,
     "noImplicitAny": false,
@@ -25,7 +24,9 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "paths": {}
+    "paths": {
+      "@core/*": ["./core/"],
+    },
   },
   "exclude": ["helm-charts", "app", "node_modules", "ci", "local", "dumps", "deployment"]
 }

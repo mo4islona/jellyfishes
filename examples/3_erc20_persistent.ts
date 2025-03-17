@@ -1,6 +1,6 @@
 import { DataSource as TypeormDatabase } from 'typeorm';
 import { TypeormAckArgs, TypeormState } from '../core/states/typeorm_state';
-import { Erc20Stream } from '../streams/erc20/erc20_stream';
+import { Erc20Stream } from '../streams/evm_erc20/erc20_stream';
 
 async function main() {
   /**
@@ -15,9 +15,11 @@ async function main() {
 
   const dataSource = new Erc20Stream({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+    range: {
+      from: 4634748,
+      to: 15844479,
+    },
     args: {
-      fromBlock: 4634748,
-      toBlock: 15844479,
       contracts: ['0xdac17f958d2ee523a2206206994597c13d831ec7'],
     },
     /**
