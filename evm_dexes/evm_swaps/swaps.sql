@@ -81,3 +81,41 @@ SELECT timestamp,
 from evm_swaps_raw
 WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
    OR token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
+
+-- Token volume by DEX view
+CREATE MATERIALIZED VIEW IF NOT EXISTS token_volume_5min_mv
+(
+    timestamp DateTime,
+    dex_name String,
+    token_address String,
+    volume UInt256
+) ENGINE = SummingMergeTree()
+ORDER BY (timestamp, dex_name, token_address)
+POPULATE
+AS
+SELECT
+	toStartOfFiveMinutes(timestamp) AS timestamp,
+	dex_name,
+	token_address,
+	SUM(volume) AS volume
+FROM (
+	SELECT
+	    toStartOfFiveMinutes(timestamp) AS timestamp,
+	    dex_name,
+	    token_a AS token_address,
+	    ABS(amount_a_raw) AS volume
+	FROM evm_swaps_raw
+	UNION ALL
+	
+	SELECT
+	    toStartOfFiveMinutes(timestamp) AS timestamp,
+	    dex_name,
+	    token_b AS token_address,
+	    ABS(amount_b_raw) AS volume
+	FROM evm_swaps_raw	
+)
+GROUP BY
+    timestamp,
+    dex_name,
+    token_address
+ORDER BY timestamp, dex_name;
