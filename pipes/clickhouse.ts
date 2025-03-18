@@ -46,10 +46,6 @@ export function createClickhouseClient() {
     password: process.env.CLICKHOUSE_PASSWORD || '',
   };
 
-  // console.log(
-  //   `Connecting to Clickhouse at ${options.url} using user ${options.username} and password ${options.password ? options.password.replaceAll(/\./g, '*') : '"-"'}`,
-  // );
-
   return createClient(options);
 }
 
@@ -61,44 +57,4 @@ export function toUnixTime(time: Date | string | number): number {
   }
 
   return Math.floor(time / 1000);
-}
-
-export async function cleanAllBeforeOffset(
-  { clickhouse, logger }: { clickhouse: ClickHouseClient; logger: Logger },
-  {
-    table,
-    offset,
-    column,
-    filter,
-  }: { table: string | string[]; offset: number; column: string; filter?: string },
-) {
-  if (!offset) return;
-
-  const tables = typeof table === 'string' ? [table] : table;
-
-  await Promise.all(
-    tables.map(async (table) => {
-      // FIXME Can cause OOM
-      const res = await clickhouse.query({
-        query: `SELECT *
-                FROM ${table} FINAL
-                WHERE ${column} >= {current_offset:UInt32} ${filter ? `AND ${filter}` : ''}`,
-        format: 'JSONEachRow',
-        query_params: { current_offset: offset },
-      });
-
-      const rows = await res.json();
-      if (rows.length === 0) {
-        return;
-      }
-
-      logger.info(`Rolling back ${rows.length} rows from ${table}`);
-
-      await clickhouse.insert({
-        table,
-        values: rows.map((row: any) => ({ ...row, sign: -1 })),
-        format: 'JSONEachRow',
-      });
-    }),
-  );
 }

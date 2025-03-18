@@ -1,4 +1,4 @@
-import { BlockRef, Offset, PortalAbstractStream } from '../../core/portal_abstract_stream';
+import { BlockRef, Offset, PortalAbstractStream } from '../../../core/portal_abstract_stream';
 
 export type DexPoolTxData = {
   timestamp: Date;
@@ -54,12 +54,6 @@ export abstract class DexPoolStream<
           const events = blocks.flatMap((block: any) => {
             if (!block.logs) return [];
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-              timestamp: block.header.timestamp,
-            });
-
             const res = block.logs
               .map((log: any) => {
                 const pool = this.decodePoolFromEvent(log);
@@ -74,7 +68,6 @@ export abstract class DexPoolStream<
                     index: log.transactionIndex,
                   },
                   timestamp: new Date(block.header.timestamp * 1000),
-                  offset,
                 };
               })
               .filter(Boolean);

@@ -6,7 +6,7 @@ type Options = { network: string };
 
 export class LevelDbState extends AbstractState implements State {
   options: Required<Options>;
-  initial?: string;
+  initial?: Offset;
 
   constructor(
     private client: ClassicLevel,

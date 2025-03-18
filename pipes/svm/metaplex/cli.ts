@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { ClickhouseState } from '../../../core/states/clickhouse_state';
-import { createLogger, formatNumber } from '../../../examples/utils';
 import { SolanaTokenMetadataStream } from '../../../streams/solana_metaplex/solana_metaplex';
 import { createClickhouseClient, ensureTables, toUnixTime } from '../../clickhouse';
+import { createLogger, formatNumber } from '../../utils';
 
 async function main() {
   const clickhouse = createClickhouseClient();
@@ -20,12 +20,6 @@ async function main() {
       table: 'solana_sync_status',
       id: 'metaplex',
     }),
-    onProgress: ({ state, interval }) => {
-      logger.info({
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
-        speed: `${interval.processedPerSecond} blocks/second`,
-      });
-    },
   });
 
   for await (const mints of await datasource.stream()) {

@@ -1,14 +1,9 @@
 import path from 'node:path';
 import * as process from 'node:process';
 import { ClickhouseState } from '../../../core/states/clickhouse_state';
-import { createLogger, formatNumber } from '../../../examples/utils';
 import { SolanaSwapsStream } from '../../../streams/solana_swaps/solana_swaps';
-import {
-  cleanAllBeforeOffset,
-  createClickhouseClient,
-  ensureTables,
-  toUnixTime,
-} from '../../clickhouse';
+import { createClickhouseClient, ensureTables, toUnixTime } from '../../clickhouse';
+import { createLogger } from '../../utils';
 import { getSortFunction } from './util';
 
 const TRACKED_TOKENS = [
@@ -26,44 +21,30 @@ async function main() {
   const ds = new SolanaSwapsStream({
     portal: 'https://portal.sqd.dev/datasets/solana-beta',
     blockRange: {
-      from: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 317617480,
+      from: process.env.FROM_BLOCK || 317617480,
     },
     args: {
       type: ['orca_whirlpool'],
-      // fromBlock: 300279448,
-      // toBlock: 300279448,
-      // fromBlock: 269021917,
       tokens: TRACKED_TOKENS,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'solana_sync_status',
       id: 'dex_swaps',
+      onStateRollback: async (state, current) => {
+        /**
+         * Clean all data before the current offset.
+         * There is a small chance if the stream is interrupted, the data will be duplicated.
+         * We just clean it up at the start to avoid duplicates.
+         */
+
+        await state.cleanAllBeforeOffset({
+          table: 'solana_swaps_raw',
+          column: 'block_number',
+          offset: current.number,
+        });
+      },
     }),
-    onStart: async ({ current, initial }) => {
-      /**
-       * Clean all data before the current offset.
-       * There is a small chance if the stream is interrupted, the data will be duplicated.
-       * We just clean it up at the start to avoid duplicates.
-       */
-      await cleanAllBeforeOffset(
-        { clickhouse, logger },
-        { table: 'solana_swaps_raw', column: 'block_number', offset: current.number },
-      );
-
-      if (initial.number === current.number) {
-        logger.info(`Syncing from ${formatNumber(current.number)}`);
-        return;
-      }
-
-      logger.info(`Resuming from ${formatNumber(current.number)}`);
-    },
-    onProgress: ({ state, interval }) => {
-      logger.info({
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
-        speed: `${interval.processedPerSecond} blocks/second`,
-      });
-    },
   });
 
   await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));

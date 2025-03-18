@@ -1,13 +1,8 @@
 import path from 'node:path';
 import { ClickhouseState } from '../../../core/states/clickhouse_state';
-import { createLogger, formatNumber } from '../../../examples/utils';
 import { EvmSwapStream } from '../../../streams/evm_swaps/evm_swap_stream';
-import {
-  cleanAllBeforeOffset,
-  createClickhouseClient,
-  ensureTables,
-  toUnixTime,
-} from '../../clickhouse';
+import { createClickhouseClient, ensureTables, toUnixTime } from '../../clickhouse';
+import { createLogger } from '../../utils';
 import { getConfig } from '../config';
 
 const DECIMALS = {
@@ -58,38 +53,21 @@ async function main() {
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
       id: `evm-swaps-${config.network}${!!process.env.BLOCK_TO ? '-pools' : ''}`,
-    }),
-    onStart: async ({ current, initial }) => {
-      /**
-       * Clean all data before the current offset.
-       * There is a small chance if the stream is interrupted, the data will be duplicated.
-       * We just clean it up at the start to avoid duplicates.
-       */
-      await cleanAllBeforeOffset(
-        { clickhouse, logger },
-        {
+      onStateRollback: async (state, current) => {
+        /**
+         * Clean all data before the current offset.
+         * There is a small chance if the stream is interrupted, the data will be duplicated.
+         * We just clean it up at the start to avoid duplicates.
+         */
+
+        await state.cleanAllBeforeOffset({
           table: 'evm_swaps_raw',
           column: 'timestamp',
           offset: current.timestamp,
           filter: `network = '${config.network}'`,
-        },
-      );
-
-      if (initial.number === current.number) {
-        logger.info(`Syncing from ${formatNumber(current.number)}`);
-        return;
-      }
-
-      const ts = new Date(current.timestamp * 1000);
-
-      logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
-    },
-    onProgress: ({ state, interval }) => {
-      logger.info({
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
-        speed: `${interval.processedPerSecond} blocks/second`,
-      });
-    },
+        });
+      },
+    }),
   });
 
   for await (const swaps of await ds.stream()) {
