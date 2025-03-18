@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_5m_transfers
     amount    Int128
 ) ENGINE = SummingMergeTree()
     ORDER BY (timestamp, token, account)
-    TTL timestamp + INTERVAL 45 DAY;
+    TTL timestamp + INTERVAL 60 DAY;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_5m_transfers_mva TO evm_erc20_5m_transfers AS
 SELECT toStartOfFiveMinutes(timestamp) as timestamp,

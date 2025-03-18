@@ -23,22 +23,27 @@ export class TypeormState extends AbstractState implements State<TypeormAckArgs>
       `UPDATE "${this.options.namespace}"."${this.options.table}"
        SET offset = $1
        WHERE id = $3`,
-      [offset, this.options.id],
+      [this.encodeOffset(offset), this.options.id],
     );
   }
 
   async getOffset() {
     try {
-      const state = await this.db.query(
-        `SELECT "offset"
+      const state = await this.db.query<{ current: string; initial: string }[]>(
+        `SELECT *
          FROM "${this.options.namespace}"."${this.options.table}"
          WHERE id = $1
          LIMIT 1`,
         [this.options.id],
       );
-      if (state.length > 0 && state[0].state > 0) {
+      const [row] = state;
+
+      if (row) {
         // FIXME save initial
-        return { current: state[0].offset, initial: state[0].offset };
+        return {
+          current: this.decodeOffset(row.current),
+          initial: this.decodeOffset(row.initial),
+        };
       }
     } catch (e: any) {
       if (e.code === '42P01') {
@@ -46,8 +51,9 @@ export class TypeormState extends AbstractState implements State<TypeormAckArgs>
           await manager.query(
             `CREATE TABLE IF NOT EXISTS "${this.options.namespace}"."${this.options.table}"
              (
-                 id     TEXT,
-                 offset TEXT
+                 "id"     TEXT,
+                 "current" TEXT,
+                 "initial" TEXT
              )`,
           );
           await manager.query(

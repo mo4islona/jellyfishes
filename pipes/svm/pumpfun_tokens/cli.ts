@@ -1,5 +1,5 @@
-import { createLogger, formatNumber } from '../../../examples/utils';
 import { SolanaPumpfunTokensStream } from '../../../streams/solana_pumpfun_tokens/solana_pumpfun';
+import { createLogger } from '../../utils';
 
 async function main() {
   const logger = createLogger('solana_tokens');
@@ -10,21 +10,6 @@ async function main() {
       from: 240_000_000,
     },
     logger,
-    onStart: async ({ current, initial }) => {
-      if (initial.number === current.number) {
-        logger.info(`Syncing from ${formatNumber(current.number)}`);
-        return;
-      }
-      const ts = new Date(current.timestamp * 1000);
-
-      logger.info(`Resuming from ${formatNumber(current.number)} produced ${ts.toISOString()}`);
-    },
-    onProgress: ({ state, interval }) => {
-      logger.info({
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
-        speed: `${interval.processedPerSecond} blocks/second`,
-      });
-    },
   });
 
   for await (const tokens of await datasource.stream()) {

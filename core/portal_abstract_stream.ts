@@ -7,6 +7,7 @@ import {
 } from '@subsquid/portal-client';
 import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
+import { formatNumber } from '../pipes/utils';
 import { State } from './state';
 import { Progress, TrackProgress } from './track_progress';
 
@@ -22,8 +23,6 @@ export type TransactionRef = {
   index: number;
 };
 
-export type Offset = string;
-
 export type StreamOptions<Args extends object | undefined> = {
   portal: string | PortalClientOptions;
   blockRange: {
@@ -36,20 +35,23 @@ export type StreamOptions<Args extends object | undefined> = {
   onProgress?: (progress: Progress) => Promise<unknown> | unknown;
   onStart?: (state: {
     state?: State;
-    current: DecodedOffset;
-    initial: DecodedOffset;
+    current: Offset;
+    initial: Offset;
+    resume: boolean;
   }) => Promise<unknown> | unknown;
 } & (Args extends object ? { args: Args } : { args?: never });
 
 const logged = new Map();
 
-type DecodedOffset = {
+export type Offset = {
   timestamp: number;
   number: number;
   hash: string;
 };
 
-function blockNumber(block: number | string) {
+export type OptionalArgs<T> = T | undefined;
+
+function parseBlockNumber(block: number | string) {
   if (typeof block === 'string') {
     /**
      * Remove commas and underscores
@@ -58,7 +60,9 @@ function blockNumber(block: number | string) {
      */
     const value = Number(block.replace(/[_,]/g, ''));
     if (isNaN(value)) {
-      throw new Error(`Block ${block} is not a number`);
+      throw new Error(
+        `Can't parse a block number from string "${block}". Valid examples: "1000000", "1_000_000", "1,000,000"`,
+      );
     }
 
     return value;
@@ -66,8 +70,6 @@ function blockNumber(block: number | string) {
 
   return block;
 }
-
-export type OptionalArgs<T> = T | undefined;
 
 export abstract class PortalAbstractStream<
   Res extends {},
@@ -78,8 +80,8 @@ export abstract class PortalAbstractStream<
 
   protected readonly portal: PortalClient;
 
-  private offset: DecodedOffset;
-  private readonly getLatestOffset: () => Promise<DecodedOffset>;
+  private offset: Offset;
+  private readonly getLatestOffset: () => Promise<Offset>;
 
   protected fromBlock: number;
   protected toBlock: number | undefined;
@@ -109,8 +111,10 @@ export abstract class PortalAbstractStream<
     // Throttle the head call
     const headCall = new Throttler(() => this.portal.getHead(), 60_000);
 
-    this.fromBlock = blockNumber(this.options.blockRange.from);
-    this.toBlock = this.options.blockRange.to ? blockNumber(this.options.blockRange.to) : undefined;
+    this.fromBlock = parseBlockNumber(this.options.blockRange.from);
+    this.toBlock = this.options.blockRange.to
+      ? parseBlockNumber(this.options.blockRange.to)
+      : undefined;
 
     // Get the latest offset
     this.getLatestOffset = async () => {
@@ -123,7 +127,6 @@ export abstract class PortalAbstractStream<
       }
 
       const latest = await headCall.get();
-
       return {
         number: latest?.number || 0,
         hash: latest?.hash || '',
@@ -131,6 +134,37 @@ export abstract class PortalAbstractStream<
         timestamp: 0,
       };
     };
+
+    // Inherit logger to the state
+    if (this.options.state && !this.options.state.logger) {
+      this.options.state.setLogger(this.logger);
+    }
+
+    if (!this.options.onStart) {
+      this.options.onStart = async ({ current, resume }) => {
+        if (!resume) {
+          this.logger.info(`Syncing from ${formatNumber(current.number)}`);
+          return;
+        }
+
+        const producedAt = new Date(current.timestamp * 1000).toLocaleString('en-GB', {
+          dateStyle: 'medium',
+          timeStyle: 'long',
+        });
+        this.logger.info(
+          `Resuming from ${formatNumber(current.number)} block produced at ${producedAt}`,
+        );
+      };
+    }
+
+    if (!this.options.onProgress) {
+      this.options.onProgress = ({ state, interval }) => {
+        this.logger.info({
+          message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
+          speed: `${interval.processedPerSecond} blocks/second`,
+        });
+      };
+    }
 
     // Probably, not the best design, but it works for now
     this.initialize();
@@ -167,7 +201,26 @@ export abstract class PortalAbstractStream<
     },
   >(req: Query): Promise<ReadableStream<PortalStreamData<Res>>> {
     // Get the last offset from the state
-    const offset = await this.getState({ number: this.fromBlock } as DecodedOffset);
+    const { current, initial, resume } = await this.getState({
+      number: this.fromBlock,
+    } as Offset);
+
+    this.options.onStart?.({
+      state: this.options.state,
+      current,
+      initial,
+      resume,
+    });
+
+    if (this.options.onProgress) {
+      this.progress = new TrackProgress<Offset>({
+        getLatestOffset: this.getLatestOffset,
+        onProgress: this.options.onProgress,
+        initial,
+      });
+    }
+
+    await this.options.state?.onStateRollback?.(current);
 
     // Ensure required block fields are present
     req.fields = {
@@ -182,7 +235,7 @@ export abstract class PortalAbstractStream<
 
     const source = this.portal.getStream<Query, Res>({
       ...req,
-      fromBlock: offset.number,
+      fromBlock: current.number,
       toBlock: this.toBlock,
     });
 
@@ -217,48 +270,16 @@ export abstract class PortalAbstractStream<
    * @param defaultValue - The default offset value to use if no state is found.
    * @returns The current offset.
    */
-  async getState(defaultValue: DecodedOffset): Promise<DecodedOffset> {
+  async getState(
+    defaultValue: Offset,
+  ): Promise<{ current: Offset; initial: Offset; resume: boolean }> {
     // Fetch the last offset from the state
-    const state = this.options.state
-      ? await this.options.state.getOffset(this.encodeOffset(defaultValue))
-      : null;
-
+    const state = this.options.state ? await this.options.state.getOffset(defaultValue) : null;
     if (!state) {
-      if (this.options.onProgress) {
-        this.progress = new TrackProgress<DecodedOffset>({
-          getLatestOffset: this.getLatestOffset,
-          onProgress: this.options.onProgress,
-          initial: defaultValue,
-        });
-      }
-
-      this.options.onStart?.({
-        state: this.options.state,
-        current: defaultValue,
-        initial: defaultValue,
-      });
-
-      return defaultValue;
+      return { current: defaultValue, initial: defaultValue, resume: false };
     }
 
-    const current = this.decodeOffset(state.current);
-    const initial = this.decodeOffset(state.initial);
-
-    await this.options.onStart?.({
-      state: this.options.state,
-      current,
-      initial,
-    });
-
-    if (this.options.onProgress) {
-      this.progress = new TrackProgress<DecodedOffset>({
-        getLatestOffset: this.getLatestOffset,
-        onProgress: this.options.onProgress,
-        initial,
-      });
-    }
-
-    return current;
+    return { ...state, resume: true };
   }
 
   /**
@@ -267,7 +288,6 @@ export abstract class PortalAbstractStream<
    * This method is called to acknowledge the last processed offset in the stream.
    * It updates the progress tracking and saves the last offset to the state.
    *
-   * @param batch - The batch of results processed.
    * @param args - Additional arguments passed to the state saveOffset method.
    */
   async ack<T extends any[]>(...args: T) {
@@ -287,20 +307,7 @@ export abstract class PortalAbstractStream<
     }
 
     // Save last offset
-    return this.options.state.saveOffset(this.encodeOffset(this.offset), ...args);
-  }
-
-  encodeOffset(offset: DecodedOffset): Offset {
-    return JSON.stringify(offset);
-  }
-
-  decodeOffset(offset: Offset): DecodedOffset {
-    return {
-      timestamp: 0,
-      number: 0,
-      hash: '',
-      ...(JSON.parse(offset) || {}),
-    };
+    return this.options.state.saveOffset(this.offset, ...args);
   }
 
   stop() {
