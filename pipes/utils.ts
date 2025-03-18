@@ -1,3 +1,4 @@
+import * as process from 'node:process';
 import { pino } from 'pino';
 
 export function last<T>(arr: T[]): T {
@@ -6,7 +7,7 @@ export function last<T>(arr: T[]): T {
 
 export function createLogger(ns: string) {
   return pino({
-    level: 'debug',
+    level: process.env.LOG_LEVEL || 'info',
     messageKey: 'message',
     transport: {
       target: 'pino-pretty',
@@ -16,10 +17,10 @@ export function createLogger(ns: string) {
       },
     },
 
-    base: {ns: ns},
+    base: { ns: ns },
   });
 }
 
 export function formatNumber(value: number) {
-  return new Intl.NumberFormat('en-US', {maximumFractionDigits: 2}).format(value);
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 }

@@ -9,7 +9,7 @@ import { Throttler } from '@subsquid/util-internal';
 import { Logger as PinoLogger, pino } from 'pino';
 import { formatNumber } from '../pipes/utils';
 import { State } from './state';
-import { Progress, TrackProgress } from './track_progress';
+import { TrackProgress } from './track_progress';
 
 export type Logger = PinoLogger;
 
@@ -23,6 +23,26 @@ export type TransactionRef = {
   index: number;
 };
 
+export type StartState = {
+  state?: State;
+  current: Offset;
+  initial: Offset;
+  resume: boolean;
+};
+
+export type ProgressState = {
+  state: {
+    initial: number;
+    last: number;
+    current: number;
+    percent: number;
+  };
+  interval: {
+    processedTotal: number;
+    processedPerSecond: number;
+  };
+};
+
 export type StreamOptions<Args extends object | undefined> = {
   portal: string | PortalClientOptions;
   blockRange: {
@@ -32,13 +52,8 @@ export type StreamOptions<Args extends object | undefined> = {
   state?: State;
   logger?: Logger;
   args?: Args;
-  onProgress?: (progress: Progress) => Promise<unknown> | unknown;
-  onStart?: (state: {
-    state?: State;
-    current: Offset;
-    initial: Offset;
-    resume: boolean;
-  }) => Promise<unknown> | unknown;
+  onProgress?: (progress: ProgressState) => Promise<unknown> | unknown;
+  onStart?: (state: StartState) => Promise<unknown> | unknown;
 } & (Args extends object ? { args: Args } : { args?: never });
 
 const logged = new Map();
@@ -80,11 +95,16 @@ export abstract class PortalAbstractStream<
 
   protected readonly portal: PortalClient;
 
-  private offset: Offset;
+  private offsets: Offset[] = [];
   private readonly getLatestOffset: () => Promise<Offset>;
 
   protected fromBlock: number;
   protected toBlock: number | undefined;
+
+  protected hooks: {
+    onStart?: (state: StartState) => Promise<unknown> | unknown;
+    onProgress?: (state: ProgressState) => Promise<unknown> | unknown;
+  };
 
   constructor(protected readonly options: StreamOptions<Args>) {
     this.logger =
@@ -140,31 +160,32 @@ export abstract class PortalAbstractStream<
       this.options.state.setLogger(this.logger);
     }
 
-    if (!this.options.onStart) {
-      this.options.onStart = async ({ current, resume }) => {
-        if (!resume) {
-          this.logger.info(`Syncing from ${formatNumber(current.number)}`);
-          return;
-        }
+    this.hooks = {
+      onStart:
+        options.onStart ||
+        (({ current, resume }) => {
+          if (!resume) {
+            this.logger.info(`Syncing from ${formatNumber(current.number)}`);
+            return;
+          }
 
-        const producedAt = new Date(current.timestamp * 1000).toLocaleString('en-GB', {
-          dateStyle: 'medium',
-          timeStyle: 'long',
-        });
-        this.logger.info(
-          `Resuming from ${formatNumber(current.number)} block produced at ${producedAt}`,
-        );
-      };
-    }
-
-    if (!this.options.onProgress) {
-      this.options.onProgress = ({ state, interval }) => {
-        this.logger.info({
-          message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
-          speed: `${interval.processedPerSecond} blocks/second`,
-        });
-      };
-    }
+          const producedAt = new Date(current.timestamp * 1000).toLocaleString('en-GB', {
+            dateStyle: 'medium',
+            timeStyle: 'long',
+          });
+          this.logger.info(
+            `Resuming from ${formatNumber(current.number)} block produced at ${producedAt}`,
+          );
+        }),
+      onProgress:
+        options.onProgress ||
+        (({ state, interval }) => {
+          this.logger.info({
+            message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
+            speed: `${interval.processedPerSecond} blocks/second`,
+          });
+        }),
+    };
 
     // Probably, not the best design, but it works for now
     this.initialize();
@@ -205,17 +226,17 @@ export abstract class PortalAbstractStream<
       number: this.fromBlock,
     } as Offset);
 
-    this.options.onStart?.({
+    this.hooks.onStart?.({
       state: this.options.state,
       current,
       initial,
       resume,
     });
 
-    if (this.options.onProgress) {
+    if (this.hooks.onProgress) {
       this.progress = new TrackProgress<Offset>({
         getLatestOffset: this.getLatestOffset,
-        onProgress: this.options.onProgress,
+        onProgress: this.hooks.onProgress,
         initial,
       });
     }
@@ -241,21 +262,34 @@ export abstract class PortalAbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
+        flush: () => {
+          this.stop();
+        },
+        // start: () => {},
         transform: (data, controller) => {
           const lastBlock = data.blocks[data.blocks.length - 1];
 
-          this.offset = {
+          this.offsets.push({
             number: lastBlock.header.number,
             hash: lastBlock.header.hash,
             timestamp: lastBlock.header.timestamp,
-          };
+          });
+
+          const batch = `${formatNumber(data.blocks[0].header.number)} / ${formatNumber(lastBlock.header.number)}`;
+
+          this.logger.debug(`Enqueuing chunks from ${batch}`);
+          /**
+           * Check if the offsets were acknowledged properly.
+           * We can have only 2 unacknowledged chunks — one is already processing on the client-side,
+           * and another is waiting to be processed in memory
+           */
+          if (this.options.state && this.offsets.length > 2) {
+            throw new Error(
+              `Offset was not acknowledged properly. Please call "await ds.ack()" after processing the data`,
+            );
+          }
 
           controller.enqueue(data);
-
-          // Check if the stream is completed
-          if (source[PortalClient.completed]) {
-            this.stop();
-          }
         },
       }),
     );
@@ -291,8 +325,13 @@ export abstract class PortalAbstractStream<
    * @param args - Additional arguments passed to the state saveOffset method.
    */
   async ack<T extends any[]>(...args: T) {
+    const offset = this.offsets.shift();
+    if (!offset) {
+      throw new Error(`Current offset is empty.`);
+    }
+
     // Calculate progress and speed
-    this.progress?.track(this.offset);
+    this.progress?.track(offset);
 
     if (!this.options.state) {
       this.warnOnlyOnce(
@@ -302,12 +341,12 @@ export abstract class PortalAbstractStream<
           '====================================',
         ].join('\n'),
       );
-
       return;
     }
-
     // Save last offset
-    return this.options.state.saveOffset(this.offset, ...args);
+    await this.options.state.saveOffset(offset, ...args);
+
+    this.logger.debug(`Acked blocks ${formatNumber(offset.number)}`);
   }
 
   stop() {
