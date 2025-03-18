@@ -254,11 +254,15 @@ export abstract class PortalAbstractStream<
       },
     };
 
-    const source = this.portal.getStream<Query, Res>({
-      ...req,
-      fromBlock: current.number,
-      toBlock: this.toBlock,
-    });
+    const source = this.portal.getStream<Query, Res>(
+      {
+        ...req,
+        fromBlock: current.number,
+        toBlock: this.toBlock,
+        parentBlockHash: current.hash,
+      },
+      {},
+    );
 
     return source.pipeThrough(
       new TransformStream({
