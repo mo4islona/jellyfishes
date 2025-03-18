@@ -1,6 +1,6 @@
 import { getInstructionData, getInstructionDescriptor } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef } from '../../core/abstract_stream';
+import { BlockRef, OptionalArgs, PortalAbstractStream } from '../../core/portal_abstract_stream';
 import * as meteora_damm from './abi/meteora_damm/index';
 import * as meteora_dlmm from './abi/meteora_dlmm/index';
 import * as whirlpool from './abi/orca_whirlpool/index';
@@ -9,7 +9,7 @@ import * as raydium_clmm from './abi/raydium_clmm/index';
 import { handleMeteoraDamm, handleMeteoraDlmm } from './handle_meteora';
 import { handleWhirlpool } from './handle_orca';
 import { handleRaydiumAmm, handleRaydiumClmm } from './handle_raydium';
-import { getTransactionHash, Instruction } from './utils';
+import { Instruction, getTransactionHash } from './utils';
 
 export type SwapType =
   | 'orca_whirlpool'
@@ -49,19 +49,17 @@ export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
 }
 
-export class SolanaSwapsStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
+export class SolanaSwapsStream extends PortalAbstractStream<
+  SolanaSwap,
+  OptionalArgs<{
     tokens?: string[];
     type?: SwapType[];
-  },
-  SolanaSwap
+  }>
 > {
   async stream(): Promise<ReadableStream<SolanaSwap[]>> {
     const { args } = this.options;
 
-    const types = args.type || [
+    const types = args?.type || [
       'orca_whirlpool',
       'meteora_damm',
       'meteora_dlmm',
@@ -71,8 +69,6 @@ export class SolanaSwapsStream extends AbstractStream<
 
     const source = await this.getStream({
       type: 'solana',
-      fromBlock: args.fromBlock,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,
@@ -208,9 +204,9 @@ export class SolanaSwapsStream extends AbstractStream<
 
               if (!swap) continue;
               else if (
-                args.tokens &&
-                !args.tokens.includes(swap.in.token.postMint) &&
-                !args.tokens.includes(swap.out.token.postMint)
+                args?.tokens &&
+                !args?.tokens.includes(swap.in.token.postMint) &&
+                !args?.tokens.includes(swap.out.token.postMint)
               ) {
                 continue;
               }

@@ -1,5 +1,5 @@
 import { DataSource, EntityManager } from 'typeorm';
-import { Offset } from '../abstract_stream';
+import { Offset } from '../portal_abstract_stream';
 import { AbstractState, State } from '../state';
 
 export type TypeormAckArgs = [EntityManager];
@@ -38,7 +38,7 @@ export class TypeormState extends AbstractState implements State<TypeormAckArgs>
       );
       if (state.length > 0 && state[0].state > 0) {
         // FIXME save initial
-        return {current: state[0].offset, initial: state[0].offset};
+        return { current: state[0].offset, initial: state[0].offset };
       }
     } catch (e: any) {
       if (e.code === '42P01') {

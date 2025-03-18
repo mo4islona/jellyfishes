@@ -1,5 +1,5 @@
 import { PortalClient } from '@subsquid/portal-client';
-import { Offset } from './abstract_stream';
+import { Offset } from './portal_abstract_stream';
 
 export interface State<Args extends any[] = any[]> {
   saveOffset(offset: Offset, ...args: Args): Promise<unknown>;

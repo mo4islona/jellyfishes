@@ -1,6 +1,6 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
+import { BlockRef, PortalAbstractStream, TransactionRef } from '../../core/portal_abstract_stream';
 import { getTransactionHash } from '../solana_swaps/utils';
 import * as tokenProgram from './abi/tokenProgram/index';
 
@@ -15,20 +15,10 @@ export type SolanaMint = {
   timestamp: Date;
 };
 
-export class SolanaMintStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
-  },
-  SolanaMint
-> {
+export class SolanaMintStream extends PortalAbstractStream<SolanaMint> {
   async stream(): Promise<ReadableStream<SolanaMint[]>> {
-    const { args } = this.options;
-
     const source = await this.getStream({
       type: 'solana',
-      fromBlock: args.fromBlock,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,
