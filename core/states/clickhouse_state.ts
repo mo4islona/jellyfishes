@@ -8,7 +8,8 @@ const table = (table: string) => `
     (
         "id"      String,
         "initial" String,
-        "offset"  String
+        "offset"  String,
+        "ts"      DateTime(3)
     ) ENGINE = ReplacingMergeTree()
 ORDER BY (id)
 `;
@@ -50,6 +51,7 @@ export class ClickhouseState extends AbstractState implements State {
           id: this.options.id,
           initial: this.initial,
           offset: this.encodeOffset(offset),
+          ts: Date.now(),
         },
       ].filter(Boolean),
       format: 'JSONEachRow',

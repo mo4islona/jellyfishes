@@ -2,7 +2,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as process from 'node:process';
 import { ClickHouseClient, createClient } from '@clickhouse/client';
-import { Logger } from '../core/portal_abstract_stream';
 
 export async function loadSqlFiles(directoryOrFile: string): Promise<string[]> {
   let sqlFiles: string[] = [];
