@@ -25,6 +25,63 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
 --
 -- ############################################################################################################
 
+-- Materialized view that transforms swap data using token information from evm_tokens
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_transformed_mv
+(
+    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
+    factory_address     LowCardinality(String),
+    network             LowCardinality(String),
+    dex_name            LowCardinality(String),
+    protocol            LowCardinality(String),
+    token_a             String,
+    token_b             String,
+    amount_a_raw        Int128,
+    amount_b_raw        Int128,
+    amount_a            Float64,
+    amount_b            Float64,
+    account             String,
+    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
+    transaction_index   UInt16,
+    log_index           UInt16,
+    transaction_hash    String,
+    sign                Int8
+) ENGINE = MergeTree()
+      PARTITION BY toYYYYMM(timestamp)
+      ORDER BY (timestamp, transaction_index, log_index)
+      POPULATE
+AS
+SELECT 
+    sr.timestamp,
+    sr.factory_address,
+    sr.network AS network,
+    sr.dex_name,
+    sr.protocol,
+    sr.token_a,
+    sr.token_b,
+    sr.amount_a_raw,
+    sr.amount_b_raw,
+    -- Recalculate amount_a using token_a decimals from evm_tokens if available
+    CASE 
+        WHEN token_a_info.decimals IS NOT NULL AND token_a_info.decimals > 0
+        THEN sr.amount_a_raw / pow(10, token_a_info.decimals)
+        ELSE sr.amount_a
+    END AS amount_a,
+    -- Recalculate amount_b using token_b decimals from evm_tokens if available
+    CASE 
+        WHEN token_b_info.decimals IS NOT NULL AND token_b_info.decimals > 0
+        THEN sr.amount_b_raw / pow(10, token_b_info.decimals)
+        ELSE sr.amount_b
+    END AS amount_b,
+    sr.account,
+    sr.block_number,
+    sr.transaction_index,
+    sr.log_index,
+    sr.transaction_hash,
+    sr.sign
+FROM evm_swaps_raw AS sr
+LEFT JOIN evm_tokens AS token_a_info ON sr.token_a = token_a_info.token_address AND sr.network = token_a_info.network
+LEFT JOIN evm_tokens AS token_b_info ON sr.token_b = token_b_info.token_address AND sr.network = token_b_info.network;
+
 -- Amount of ETH and USDC swapped for each minute (we can calculate price then).
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_eth_amounts_mv
 (
@@ -49,7 +106,7 @@ SELECT toStartOfMinute(timestamp) as timestamp,
                THEN abs(amount_b) * sign
            ELSE abs(amount_a) * sign
            END as usdc_amount
-from evm_swaps_raw
+from evm_swaps_raw_transformed_mv
 WHERE (
     token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
         AND token_b IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
@@ -86,129 +143,217 @@ SELECT timestamp,
            ELSE abs(amount_b / amount_a)
            END as price_token_eth,
        sign
-from evm_swaps_raw
+from evm_swaps_raw_transformed_mv
 WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
    OR token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
 
 
-/*
-View with all swaps and their prices
+-- Materialized view that duplicates each swap row with token_a and token_b swapped
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_dupl_mv
+(
+    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
+    factory_address     LowCardinality(String),
+    network             LowCardinality(String),
+    dex_name            LowCardinality(String),
+    protocol            LowCardinality(String),
+    token_a             String,
+    token_b             String,
+    amount_a_raw        Int128,
+    amount_b_raw        Int128,
+    amount_a            Float64,
+    amount_b            Float64,
+    account             String,
+    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
+    transaction_index   UInt16,
+    log_index           UInt16,
+    transaction_hash    String,
+    sign                Int8
+) ENGINE = MergeTree()
+      PARTITION BY toYYYYMM(timestamp)
+      ORDER BY (timestamp, transaction_index, log_index)
+      POPULATE
+AS
+-- Original rows
+SELECT 
+    timestamp,
+    factory_address,
+    network,
+    dex_name,
+    protocol,
+    token_a,
+    token_b,
+    amount_a_raw,
+    amount_b_raw,
+    amount_a,
+    amount_b,
+    account,
+    block_number,
+    transaction_index,
+    log_index,
+    transaction_hash,
+    sign
+FROM evm_swaps_raw_transformed_mv
 
+UNION ALL
+
+-- Duplicated rows with token_a and token_b swapped
+SELECT 
+    timestamp,
+    factory_address,
+    network,
+    dex_name,
+    protocol,
+    sr.token_b AS token_a,         -- Swap token_a and token_b
+    sr.token_a AS token_b,
+    sr.amount_b_raw AS amount_a_raw, -- Swap amount_a and amount_b
+    sr.amount_a_raw AS amount_b_raw,
+    sr.amount_b AS amount_a,
+    sr.amount_a AS amount_b,
+    account,
+    block_number,
+    transaction_index,
+    log_index,
+    transaction_hash,
+    sign
+FROM evm_swaps_raw_transformed_mv as sr;
+
+
+/*
  * Solution idea:
- * 1. need to calc volumes
- * 2. to calc volumes we need to calc USD amount of token swapped for *each* raw_swap
- * !!! problem !!!  not every swap is to ETH/USDC, so we somehow must price_token_eth for these points (it is 8% of swaps).
- * 3. Create MV to look back and calc USD volume for each swap!
- * 
- * evm_swaps_with_prices_mv
- * 
- * UNION 3 datasets
- *
- *	1. swaps with USD		- direct price calculation (price_token_usdc)
- *	2. swaps with WETH 		– join with evm_eth_amounts_mv and calc price_token_usdc = price_token_eth*price_eth_usdc
- *	3. swap coin to coin	- asof join back same token swap to ETH with timestamp less than current
- *	
- *	USD <-> WETH swaps – as we are not interested in USDC/WETH volumes (the goal is to find promising coins), 
- *	we must just exclude these from volume calculations, so this is done in datasets 1, 2.
+ * 1. need to calc volumes traded. Each swap – consists of 2 tokens and it creates 2 volume records – one of token_a, 
+ * 	other of token_b (MV evm_swaps_raw_dupl_mv)
+ * 2. we go thru rows of evm_swaps_raw_dupl_mv and calculate usd_price for token_a.
+ * It will allow us to calculate volume later (we know price_token_a and amount_a)
  * 
 */	
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_with_prices_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
 (
     timestamp DateTime CODEC (DoubleDelta, ZSTD),
     network 		LowCardinality(String),
-    token_address 	String,
+    dex_name		LowCardinality(String),
+    token_a		 	String,
     price_token_usd Float64,
     price_token_eth Float64,
     price_eth_usd	Float64,
     swap_type		String,
+    token_b             String,
+    amount_a_raw        Int128,
+    amount_b_raw        Int128,
+    amount_a            Float64,
+    amount_b            Float64,
+    account             String,
+    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
+    transaction_index   UInt16,
+    log_index           UInt16,
+    transaction_hash    String,
     sign 			Int8
 ) ENGINE MergeTree()
-    ORDER BY (timestamp, token_address, network)
+    ORDER BY (timestamp, token_a, network)
     TTL timestamp + INTERVAL 360 DAY
     POPULATE
 AS
-	-- swaps WITH USDC - calc price_token_usdc directly
+	-- token_a is USDC
 	SELECT timestamp,
-	       network,
-	       CASE
-	           WHEN token_a IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	               THEN token_b
-	           ELSE token_a
-	           END as token_address,
-	       CASE
-	           WHEN token_a IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	               THEN abs(amount_a / amount_b)
-	           ELSE abs(amount_b / amount_a)
-	           END as price_token_usd,
-	       0 AS price_token_eth,
-	       0 AS price_eth_usd,
-	       'with_usdc' AS swap_type,
-	       sign
-	from evm_swaps_raw
-	WHERE -- USDC-something (not WETH)
-	(	token_a IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-		AND token_b NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-	) 
-	OR (
-		token_b IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-		AND token_a NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-	)
-	   	   
+		network,
+		dex_name,
+		token_a,
+	   	1 AS price_token_usd,
+		0 AS price_token_eth,
+		0 AS price_eth_usd,
+		'usdc-*' AS swap_type,
+	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
+	    block_number, transaction_index, log_index, transaction_hash,
+	    sign
+	FROM evm_swaps_raw_dupl_mv
+	WHERE token_a IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+	
 	UNION ALL
 	
-	-- swaps WITH WETH - calc price_token_usdc
+	-- token_b is USDC
+	SELECT timestamp,
+		network,
+		dex_name,
+		token_a,
+	   	ABS(amount_b / amount_a) AS price_token_usd,
+		0 AS price_token_eth,
+		0 AS price_eth_usd,
+		'*-usdc' AS swap_type,
+	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
+	    block_number, transaction_index, log_index, transaction_hash,
+	    sign
+	FROM evm_swaps_raw_dupl_mv
+	WHERE token_b IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+
+	UNION ALL
+	
+	-- token_a is WETH and token_b is not USDC
 	WITH prices_eth_usdc_every_minute AS (
 		SELECT timestamp, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
 		FROM evm_eth_amounts_mv GROUP BY timestamp
 	)
-	SELECT timestamp, 
-       network,
-       CASE
-           WHEN token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-               THEN token_b
-           ELSE token_a
-           END as token_address,
-       price_token_eth*pem.price_eth_usdc as price_token_usd,
-       (CASE
-           WHEN token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-               THEN abs(amount_a / amount_b)
-           ELSE abs(amount_b / amount_a)
-       END) AS price_token_eth,
-       price_eth_usdc AS price_eth_usd,
-       'with_weth' AS swap_type,
-       sign
-	FROM evm_swaps_raw esr
+	SELECT timestamp,
+		network,
+		dex_name,
+		token_a,
+	    price_eth_usd as price_token_a_usd,
+	    1 AS price_token_a_eth,
+	    pem.price_eth_usdc AS price_eth_usd,
+	    'weth-!usdc' AS swap_type,
+	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
+	    block_number, transaction_index, log_index, transaction_hash,
+	    sign
+	FROM evm_swaps_raw_dupl_mv esr
 		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.timestamp = toStartOfMinute(esr.`timestamp`)
-	WHERE -- WETH-something (not USDC)
-	(	token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
+	WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	)
-	OR ( 
-		token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-		AND token_a NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	)
-
-	UNION ALL
 	
-	-- swaps b/w two coins (not WETH and USDC involved), here data is for *token_a*
+	UNION ALL
+	-- token_a is not WETH/USDC, token_b is WETH
 	WITH prices_eth_usdc_every_minute AS (
-		SELECT timestamp AS ts_inner, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
+		SELECT timestamp, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
 		FROM evm_eth_amounts_mv GROUP BY timestamp
 	)
-	SELECT esr.timestamp, 
-       esr.network,
-       esr.token_a AS token_address,
-       price_token_eth*price_eth_usd AS price_token_usd,
-       evm_prices_token_eth_mv.price_token_eth AS price_token_eth,       
-       pem.price_eth_usdc AS price_eth_usd,
-       'coin2coin_a' AS swap_type,
-       esr.sign
-	FROM evm_swaps_raw esr
+	SELECT timestamp,
+		network,
+		dex_name,
+		token_a,
+	    price_token_a_eth*price_eth_usd as price_token_a_usd,
+	    ABS(amount_b / amount_a) AS price_token_a_eth,
+	    pem.price_eth_usdc AS price_eth_usd,
+	    'weth|usdc-weth' AS swap_type,
+	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
+	    block_number, transaction_index, log_index, transaction_hash,
+	    sign
+	FROM evm_swaps_raw_dupl_mv esr
+		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.timestamp = toStartOfMinute(esr.`timestamp`)
+	WHERE token_a NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+		AND token_b IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
+	
+	
+	UNION ALL
+	
+	-- token_a and token_b are not WETH/USDC
+	WITH prices_eth_usdc_every_minute AS (
+		SELECT timestamp, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
+		FROM evm_eth_amounts_mv GROUP BY timestamp
+	)
+	SELECT esr.timestamp,
+		esr.network,
+		dex_name,
+		token_a,
+        price_token_eth*price_eth_usd AS price_token_a_usd,
+        evm_prices_token_eth_mv.price_token_eth AS price_token_a_eth,    
+        pem.price_eth_usdc AS price_eth_usd,
+	    '!(weth|usdc)-!(weth|usdc)' AS swap_type,
+	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
+	    block_number, transaction_index, log_index, transaction_hash,
+	    esr.sign
+	FROM evm_swaps_raw_dupl_mv esr
 	 	-- looking back for first swap of esr.token_a to ETH
-		ASOF JOIN evm_prices_token_eth_mv ON
+		ASOF LEFT JOIN evm_prices_token_eth_mv ON
 			evm_prices_token_eth_mv.timestamp < esr.timestamp
 			AND evm_prices_token_eth_mv.token_address = esr.token_a 
-		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.ts_inner = toStartOfMinute(esr.timestamp)
+		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.timestamp = toStartOfMinute(esr.`timestamp`)
 	WHERE -- NOT WETH AND USDC
 	(	token_a NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
 		AND token_a NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
@@ -217,33 +362,3 @@ AS
 	(	token_b NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 	)
-	
-	UNION ALL
-	
-	-- swaps b/w two coins (not WETH and USDC involved), here data is for *token_b*
-	WITH prices_eth_usdc_every_minute AS (
-		SELECT timestamp AS ts_inner, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
-		FROM evm_eth_amounts_mv GROUP BY timestamp
-	)
-	SELECT esr.timestamp, 
-       esr.network,
-       esr.token_b AS token_address,
-       price_token_eth*price_eth_usd AS price_token_usd,
-       evm_prices_token_eth_mv.price_token_eth AS price_token_eth,       
-       pem.price_eth_usdc AS price_eth_usd,
-       'coin2coin_b' AS swap_type,
-       esr.sign
-	FROM evm_swaps_raw esr
-	 	-- looking back for first swap of esr.token_b to ETH
-		ASOF JOIN evm_prices_token_eth_mv ON
-			evm_prices_token_eth_mv.timestamp < esr.timestamp
-			AND evm_prices_token_eth_mv.token_address = esr.token_b
-		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.ts_inner = toStartOfMinute(esr.timestamp)
-	WHERE -- NOT WETH AND USDC
-	(	token_a NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-		AND token_a NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	)
-	AND
-	(	token_b NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
-		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-	)	
