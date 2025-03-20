@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
 -- ############################################################################################################
 
 -- Materialized view that transforms swap data using token information from evm_tokens
+-- TODO: slow to create, consider refactoring.
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_transformed_mv
 (
     timestamp           DateTime CODEC (DoubleDelta, ZSTD),
@@ -149,6 +150,7 @@ WHERE token_a IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223f
 
 
 -- Materialized view that duplicates each swap row with token_a and token_b swapped
+-- TODO: slow to create, consider refactoring.
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_dupl_mv
 (
     timestamp           DateTime CODEC (DoubleDelta, ZSTD),
@@ -225,6 +227,7 @@ FROM evm_swaps_raw_transformed_mv as sr;
  * 2. we go thru rows of evm_swaps_raw_dupl_mv and calculate usd_price for token_a.
  * It will allow us to calculate volume later (we know price_token_a and amount_a)
  * 
+ TODO: optimize if possible, slow.
 */	
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
 (
@@ -232,8 +235,8 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
     network 		LowCardinality(String),
     dex_name		LowCardinality(String),
     token_a		 	String,
-    price_token_usd Float64,
-    price_token_eth Float64,
+    price_token_a_usd Float64,
+    price_token_a_eth Float64,
     price_eth_usd	Float64,
     swap_type		String,
     token_b             String,
@@ -248,7 +251,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
     transaction_hash    String,
     sign 			Int8
 ) ENGINE MergeTree()
-    ORDER BY (timestamp, token_a, network)
+    ORDER BY (timestamp, token_a, dex_name, network)
     TTL timestamp + INTERVAL 360 DAY
     POPULATE
 AS
@@ -320,7 +323,7 @@ AS
 	    price_token_a_eth*price_eth_usd as price_token_a_usd,
 	    ABS(amount_b / amount_a) AS price_token_a_eth,
 	    pem.price_eth_usdc AS price_eth_usd,
-	    'weth|usdc-weth' AS swap_type,
+	    '!(weth|usdc)-weth' AS swap_type,
 	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
 	    block_number, transaction_index, log_index, transaction_hash,
 	    sign
@@ -362,3 +365,32 @@ AS
 	(	token_b NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 	)
+
+-- Materialized view that shows token volumes in USD by dex_name in 5-minute intervals
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_volume_usd5min_mv
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    network LowCardinality(String),
+    dex_name LowCardinality(String),
+    token_address String,
+    volume_usd Float64
+) ENGINE = SummingMergeTree()
+    PARTITION BY toYYYYMM(timestamp)
+    ORDER BY (timestamp, network, dex_name, token_address)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
+AS
+	SELECT 
+	    toStartOfFiveMinutes(timestamp) AS timestamp,
+	    network,
+	    dex_name,
+	    token_a AS token_address,
+	    sum(ABS(amount_a * price_token_a_usd)) AS volume_usd
+	FROM evm_swap_parts_with_prices_mv
+	WHERE price_token_a_usd > 0
+	GROUP BY 
+	    timestamp,
+	    network,
+	    dex_name,
+	    token_address
+	ORDER BY timestamp
