@@ -394,3 +394,59 @@ AS
 	    dex_name,
 	    token_address
 	ORDER BY timestamp
+
+-- Materialized view that generates 5-minute candlestick data for tokens
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    network LowCardinality(String),
+    token String,
+    open Float64,
+    high Float64,
+    low Float64,
+    close Float64,
+    volume Float64
+) ENGINE = ReplacingMergeTree()
+    PARTITION BY toYYYYMM(timestamp)
+    ORDER BY (timestamp, token, network)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
+AS
+WITH price_points AS (
+    SELECT
+        toStartOfFiveMinutes(timestamp) AS interval_start,
+        network,
+        token_a AS token,
+        price_token_a_usd AS price,
+        amount_a AS amount,
+        timestamp
+    FROM evm_swap_parts_with_prices_mv
+    WHERE price_token_a_usd < 500 AND price_token_a_usd !=0 --AND timestamp > '2025-03-18 00:00:00' AND token_a = '0xbc45647ea894030a4e9801ec03479739fa2485f0'
+),
+aggregated_data AS (
+    SELECT
+        interval_start,
+        network,
+        token,
+        argMin(price, timestamp) AS open_price,
+        max(price) AS high_price,
+        min(price) AS low_price,
+        argMax(price, timestamp) AS close_price,
+        sum(abs(amount)) AS volume
+    FROM price_points
+    GROUP BY
+        interval_start,
+        network,
+        token
+)
+SELECT
+    interval_start AS timestamp,
+    network,
+    token,
+    open_price AS open,
+    high_price AS high,
+    low_price AS low,
+    close_price AS close,
+    volume
+FROM aggregated_data
+ORDER BY timestamp, token, network;
