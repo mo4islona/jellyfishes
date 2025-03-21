@@ -22,28 +22,29 @@ async function main() {
     portal: 'https://portal.sqd.dev/datasets/solana-beta',
     blockRange: {
       from: process.env.FROM_BLOCK || 317617480,
+      to: process.env.TO_BLOCK,
     },
     args: {
-      type: ['orca_whirlpool'],
+      // type: ['orca_whirlpool'],
       tokens: TRACKED_TOKENS,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'solana_sync_status',
       id: 'dex_swaps',
-      onStateRollback: async (state, current) => {
-        /**
-         * Clean all data before the current offset.
-         * There is a small chance if the stream is interrupted, the data will be duplicated.
-         * We just clean it up at the start to avoid duplicates.
-         */
-
-        await state.cleanAllBeforeOffset({
-          table: 'solana_swaps_raw',
-          column: 'block_number',
-          offset: current.number,
-        });
-      },
+      // onStateRollback: async (state, current) => {
+      //   /**
+      //    * Clean all data before the current offset.
+      //    * There is a small chance if the stream is interrupted, the data will be duplicated.
+      //    * We just clean it up at the start to avoid duplicates.
+      //    */
+      //
+      //   await state.cleanAllBeforeOffset({
+      //     table: 'solana_swaps_raw',
+      //     column: 'block_number',
+      //     offset: current.number,
+      //   });
+      // },
     }),
   });
 

@@ -242,8 +242,6 @@ export class SolanaSwapsStream extends PortalAbstractStream<
             return swaps;
           });
 
-          if (!res.length) return;
-
           controller.enqueue(res);
         },
       }),

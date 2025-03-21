@@ -931,14 +931,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/http-client@npm:1.7.0-portal-api.d48fcb":
-  version: 1.7.0-portal-api.d48fcb
-  resolution: "@subsquid/http-client@npm:1.7.0-portal-api.d48fcb"
+"@subsquid/http-client@npm:1.7.0-portal-api.da1f68":
+  version: 1.7.0-portal-api.da1f68
+  resolution: "@subsquid/http-client@npm:1.7.0-portal-api.da1f68"
   dependencies:
-    "@subsquid/logger": "npm:1.5.0-portal-api.d48fcb"
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.d48fcb"
+    "@subsquid/logger": "npm:1.5.0-portal-api.da1f68"
+    "@subsquid/util-internal": "npm:3.3.0-portal-api.da1f68"
     node-fetch: "npm:^3.3.2"
-  checksum: 10c0/77820d69d1fa25124002357d1ba4cefd3edcaaa4027bfbdb6d4cae83a15797ca9b9fcff19ae8b49b811a22c7a96133868383c8891b618274758e8da61d6728f5
+  checksum: 10c0/0a8afff1ae7b3c0dbd61eac6e100e7f45f8c706f07dbb8c61aba69a3cc8894c785e40e1c8a21fa1d6952e355f0fbc19edd2e0213995938e538cce587fa2d0443
   languageName: node
   linkType: hard
 
@@ -953,14 +953,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/logger@npm:1.5.0-portal-api.d48fcb":
-  version: 1.5.0-portal-api.d48fcb
-  resolution: "@subsquid/logger@npm:1.5.0-portal-api.d48fcb"
+"@subsquid/logger@npm:1.5.0-portal-api.da1f68":
+  version: 1.5.0-portal-api.da1f68
+  resolution: "@subsquid/logger@npm:1.5.0-portal-api.da1f68"
   dependencies:
     "@subsquid/util-internal-hex": "npm:^1.2.2"
     "@subsquid/util-internal-json": "npm:^1.2.3"
     supports-color: "npm:^8.1.1"
-  checksum: 10c0/43628c3c061df75ce4a358b36401a74444e9d30f1f45c5f797a73ed6f38882f134527d959a9d93e1e50264e2fe089204d31271c0c76a9471503eb22a093bb114
+  checksum: 10c0/5d32f694deae59f3c1850d4f1f6ccde2ed31ac4b5628c74cfe1c6ded6d3b07437177b9c0f04f3e39f94368fcb4d8baa44959be3fc2c3d94208b0b913172880a7
   languageName: node
   linkType: hard
 
@@ -975,39 +975,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/portal-client@npm:0.0.1-portal-api.18ef40":
-  version: 0.0.1-portal-api.18ef40
-  resolution: "@subsquid/portal-client@npm:0.0.1-portal-api.18ef40"
+"@subsquid/portal-client@npm:0.0.1-portal-api.da1f68":
+  version: 0.0.1-portal-api.da1f68
+  resolution: "@subsquid/portal-client@npm:0.0.1-portal-api.da1f68"
   dependencies:
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.18ef40"
-    "@subsquid/util-internal-archive-layout": "npm:2.0.0-portal-api.18ef40"
+    "@subsquid/util-internal": "npm:3.3.0-portal-api.da1f68"
+    "@subsquid/util-internal-archive-layout": "npm:2.0.0-portal-api.da1f68"
     "@subsquid/util-internal-range": "npm:^0.3.0"
     "@subsquid/util-timeout": "npm:^2.3.2"
   peerDependencies:
-    "@subsquid/http-client": 1.7.0-portal-api.18ef40
-    "@subsquid/logger": 1.5.0-portal-api.18ef40
+    "@subsquid/http-client": 1.7.0-portal-api.da1f68
+    "@subsquid/logger": 1.5.0-portal-api.da1f68
   peerDependenciesMeta:
     "@subsquid/logger":
       optional: true
-  checksum: 10c0/eac60680460a15b5aebb1e6e98c71c2d1be632d0b407734de2e9d80c9bca66af67909ac8bb4acdc35743ddbdbb18bf8c56b542237162b6ecf9735ff9af371240
-  languageName: node
-  linkType: hard
-
-"@subsquid/portal-client@npm:0.0.1-portal-api.d48fcb":
-  version: 0.0.1-portal-api.d48fcb
-  resolution: "@subsquid/portal-client@npm:0.0.1-portal-api.d48fcb"
-  dependencies:
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.d48fcb"
-    "@subsquid/util-internal-archive-layout": "npm:2.0.0-portal-api.d48fcb"
-    "@subsquid/util-internal-range": "npm:^0.3.0"
-    "@subsquid/util-timeout": "npm:^2.3.2"
-  peerDependencies:
-    "@subsquid/http-client": 1.7.0-portal-api.d48fcb
-    "@subsquid/logger": 1.5.0-portal-api.d48fcb
-  peerDependenciesMeta:
-    "@subsquid/logger":
-      optional: true
-  checksum: 10c0/9bfdfd3d90e22614ce90279e791186d47a1cf52ffa2c4deef2d9bd73e73f6ffe57089eac04343f65dc7fb3809e125d62b64c3db6a667d825b94099cbc2701975
+  checksum: 10c0/de83d81ae283d525987927fc5332a0ad61d635b3a425b9a448621e5d7cea65dd89d2cc6e0c3315b1c81a0e7dda2dea81dc467aeeb3c15c570b05819b65caa712
   languageName: node
   linkType: hard
 
@@ -1026,44 +1008,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/solana-normalization@npm:1.0.0-portal-api.d48fcb":
-  version: 1.0.0-portal-api.d48fcb
-  resolution: "@subsquid/solana-normalization@npm:1.0.0-portal-api.d48fcb"
+"@subsquid/solana-normalization@npm:1.0.0-portal-api.da1f68":
+  version: 1.0.0-portal-api.da1f68
+  resolution: "@subsquid/solana-normalization@npm:1.0.0-portal-api.da1f68"
   dependencies:
-    "@subsquid/solana-rpc-data": "npm:1.0.0-portal-api.d48fcb"
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.d48fcb"
+    "@subsquid/solana-rpc-data": "npm:1.0.0-portal-api.da1f68"
+    "@subsquid/util-internal": "npm:3.3.0-portal-api.da1f68"
     "@subsquid/util-internal-validation": "npm:^0.7.0"
-  checksum: 10c0/e1b591527ac1960bdbd5cdbd94e13f63fbd0c2d3edd23008dd7376af9962c3a19536a7e4f78d70e02240d924138e10388e07ff365119d1c128d40fa040dcc628
+  checksum: 10c0/2033ec42ae8f7020ce6f5dc245fe3d50a962247ba5581ae7a7d66193a6581508ac7a07551abee0cebacb15beb5d419bae1a7856989c6607bca8e9680b58860e4
   languageName: node
   linkType: hard
 
-"@subsquid/solana-rpc-data@npm:1.0.0-portal-api.d48fcb":
-  version: 1.0.0-portal-api.d48fcb
-  resolution: "@subsquid/solana-rpc-data@npm:1.0.0-portal-api.d48fcb"
+"@subsquid/solana-rpc-data@npm:1.0.0-portal-api.da1f68":
+  version: 1.0.0-portal-api.da1f68
+  resolution: "@subsquid/solana-rpc-data@npm:1.0.0-portal-api.da1f68"
   peerDependencies:
     "@subsquid/util-internal-validation": ^0.7.0
-  checksum: 10c0/4088eb171bc85b76ab922042a5b6424cd1100cb6d854c075b3c9ef307f4b9b313f52395fc378afab094d6c78f268fd33f8bbae8e1fa95beed0dfcdb3d8123c2f
+  checksum: 10c0/d79686f071891b17fca53629bd5831d4f301a8870f7411590bfde75ea41d5710c6008d924729754724b99bc8b7ffce6754e255be30f24cdcc1a059a6af40eb4f
   languageName: node
   linkType: hard
 
-"@subsquid/solana-stream@npm:1.0.0-portal-api.d48fcb":
-  version: 1.0.0-portal-api.d48fcb
-  resolution: "@subsquid/solana-stream@npm:1.0.0-portal-api.d48fcb"
+"@subsquid/solana-stream@npm:1.0.0-portal-api.da1f68":
+  version: 1.0.0-portal-api.da1f68
+  resolution: "@subsquid/solana-stream@npm:1.0.0-portal-api.da1f68"
   dependencies:
-    "@subsquid/http-client": "npm:1.7.0-portal-api.d48fcb"
-    "@subsquid/logger": "npm:1.5.0-portal-api.d48fcb"
-    "@subsquid/portal-client": "npm:0.0.1-portal-api.d48fcb"
-    "@subsquid/solana-normalization": "npm:1.0.0-portal-api.d48fcb"
-    "@subsquid/solana-rpc-data": "npm:1.0.0-portal-api.d48fcb"
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.d48fcb"
-    "@subsquid/util-internal-data-source": "npm:0.0.1-portal-api.d48fcb"
+    "@subsquid/http-client": "npm:1.7.0-portal-api.da1f68"
+    "@subsquid/logger": "npm:1.5.0-portal-api.da1f68"
+    "@subsquid/portal-client": "npm:0.0.1-portal-api.da1f68"
+    "@subsquid/solana-normalization": "npm:1.0.0-portal-api.da1f68"
+    "@subsquid/solana-rpc-data": "npm:1.0.0-portal-api.da1f68"
+    "@subsquid/util-internal": "npm:3.3.0-portal-api.da1f68"
+    "@subsquid/util-internal-data-source": "npm:0.0.1-portal-api.da1f68"
     "@subsquid/util-internal-hex": "npm:^1.2.2"
     "@subsquid/util-internal-ingest-tools": "npm:^1.1.4"
     "@subsquid/util-internal-processor-tools": "npm:^4.2.1"
     "@subsquid/util-internal-range": "npm:^0.3.0"
     "@subsquid/util-internal-validation": "npm:^0.7.0"
     bs58: "npm:^5.0.0"
-  checksum: 10c0/0008cb34231544f56f1d117e3d27c2ecd5052fe433c7aa4470e30506c2f136f2ce83b64c5e25dcc58fc8016f5f21ee4d28a6acc75eee15b72622ab0d5760c5cc
+  checksum: 10c0/c6076223347d737a6eac9158e74ddee5004b21b2e2ffababd8ba7bece8ed372d485239279f7b7adb502724c3b6f33ba272498a4a5ddc6c4a500090f8132dc824
   languageName: node
   linkType: hard
 
@@ -1089,29 +1071,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.18ef40":
-  version: 2.0.0-portal-api.18ef40
-  resolution: "@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.18ef40"
+"@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.da1f68":
+  version: 2.0.0-portal-api.da1f68
+  resolution: "@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.da1f68"
   dependencies:
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.18ef40"
+    "@subsquid/util-internal": "npm:3.3.0-portal-api.da1f68"
     "@subsquid/util-internal-hex": "npm:^1.2.2"
     "@subsquid/util-internal-range": "npm:^0.3.0"
   peerDependencies:
     "@subsquid/util-internal-fs": ^0.2.0
-  checksum: 10c0/6d7028d553bc61cfc5046371e7b57c4c8c1155c410fc2df83245559c9e3a3d8ddd211f0b462d7d778a5cea1d06d5a7ebf9a42507d57b7fb442bf2698c5109dd6
-  languageName: node
-  linkType: hard
-
-"@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.d48fcb":
-  version: 2.0.0-portal-api.d48fcb
-  resolution: "@subsquid/util-internal-archive-layout@npm:2.0.0-portal-api.d48fcb"
-  dependencies:
-    "@subsquid/util-internal": "npm:3.3.0-portal-api.d48fcb"
-    "@subsquid/util-internal-hex": "npm:^1.2.2"
-    "@subsquid/util-internal-range": "npm:^0.3.0"
-  peerDependencies:
-    "@subsquid/util-internal-fs": ^0.2.0
-  checksum: 10c0/a1f0f26eca9d2c652298335fc5e921606e3cfdcd906d8b37066233904942672cc117de3d607016777e6ba7d0877e84bddf95ee4090bd7cb83b1a23d442e1f852
+  checksum: 10c0/e6f51acabad195a700e2b6edc29d5512a645f92d4359a29239743e9bc3616ec064f1677abacced27d6d918e8b6e8f3e1bc05a934e16b927cce955a104484ccee
   languageName: node
   linkType: hard
 
@@ -1145,12 +1114,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/util-internal-data-source@npm:0.0.1-portal-api.d48fcb":
-  version: 0.0.1-portal-api.d48fcb
-  resolution: "@subsquid/util-internal-data-source@npm:0.0.1-portal-api.d48fcb"
+"@subsquid/util-internal-data-source@npm:0.0.1-portal-api.da1f68":
+  version: 0.0.1-portal-api.da1f68
+  resolution: "@subsquid/util-internal-data-source@npm:0.0.1-portal-api.da1f68"
   dependencies:
     "@subsquid/util-internal-range": "npm:^0.3.0"
-  checksum: 10c0/55d46e9ed6aa4f67f41b3f64de29f6c1f7696a25d20f00c98314b1ac8a6c01b7987e93db467b4cb8854b967a0b74ec00c46834ea991bf3a95d0da0c157f7db74
+  checksum: 10c0/d0c49e40d7c74ec6b0139dd6474a5279aa0f471447c4077e8861ba966c9c683ef210fabff7fbf1a3719ca940a300709246f37ea3d59ffea681c30ae25ac6667c
   languageName: node
   linkType: hard
 
@@ -1258,17 +1227,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@subsquid/util-internal@npm:3.3.0-portal-api.18ef40":
-  version: 3.3.0-portal-api.18ef40
-  resolution: "@subsquid/util-internal@npm:3.3.0-portal-api.18ef40"
-  checksum: 10c0/0694d8f0186a11990fc0d3a13aafe8a9261a43947a5010aa16681b15b3cf66f5229fda1311d73b446904c5b4bee948ff7e7d9624a638376e90536be4c007499d
-  languageName: node
-  linkType: hard
-
-"@subsquid/util-internal@npm:3.3.0-portal-api.d48fcb":
-  version: 3.3.0-portal-api.d48fcb
-  resolution: "@subsquid/util-internal@npm:3.3.0-portal-api.d48fcb"
-  checksum: 10c0/ee99198729cec820a7a0fa56e79b0ecd1b88b869b30a8f633cb6bab5e565c1490336084614d0c32a1535d23725fef283f996ad3b57563a0b2749e5a95c338509
+"@subsquid/util-internal@npm:3.3.0-portal-api.da1f68":
+  version: 3.3.0-portal-api.da1f68
+  resolution: "@subsquid/util-internal@npm:3.3.0-portal-api.da1f68"
+  checksum: 10c0/6080d715b692092d1d2d7fad4acd1d1db4a8e0bcab7b5a6c46b0eff6db64786de5d73f49659f1be066119b6ff980b74686d6b02d22b541782f6c2caec47f69c4
   languageName: node
   linkType: hard
 
@@ -3621,8 +3583,8 @@ __metadata:
     "@subsquid/evm-abi": "npm:^0.3.1"
     "@subsquid/evm-codec": "npm:^0.3.0"
     "@subsquid/evm-typegen": "npm:^4.3.0"
-    "@subsquid/portal-client": "npm:0.0.1-portal-api.18ef40"
-    "@subsquid/solana-stream": "npm:1.0.0-portal-api.d48fcb"
+    "@subsquid/portal-client": "npm:0.0.1-portal-api.da1f68"
+    "@subsquid/solana-stream": "npm:1.0.0-portal-api.da1f68"
     "@subsquid/solana-typegen": "npm:^0.4.0"
     "@types/lodash": "npm:^4"
     "@types/node": "npm:^22.13.1"

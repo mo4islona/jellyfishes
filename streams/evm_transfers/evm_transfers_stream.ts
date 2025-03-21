@@ -82,8 +82,6 @@ export class EvmTransfersStream extends PortalAbstractStream<
               });
           });
 
-          if (!events.length) return;
-
           controller.enqueue(events);
         },
       }),

@@ -140,8 +140,6 @@ export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenM
             return metadata;
           });
 
-          if (!res.length) return;
-
           controller.enqueue(res);
         },
       }),
