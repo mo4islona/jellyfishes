@@ -46,7 +46,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_transformed_mv
     log_index           UInt16,
     transaction_hash    String,
     sign                Int8
-) ENGINE = MergeTree()
+) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp)
       ORDER BY (timestamp, transaction_index, log_index)
       POPULATE
@@ -169,10 +169,11 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_dupl_mv
     transaction_index   UInt16,
     log_index           UInt16,
     transaction_hash    String,
+    reversed_swap       Bool,
     sign                Int8
-) ENGINE = MergeTree()
+) ENGINE = CollapsingMergeTree(sign)
       PARTITION BY toYYYYMM(timestamp)
-      ORDER BY (timestamp, transaction_index, log_index)
+      ORDER BY (timestamp, transaction_index, log_index, reversed_swap)
       POPULATE
 AS
 -- Original rows
@@ -193,13 +194,14 @@ SELECT
     transaction_index,
     log_index,
     transaction_hash,
+    false as reversed_swap,
     sign
 FROM evm_swaps_raw_transformed_mv
 
 UNION ALL
 
 -- Duplicated rows with token_a and token_b swapped
-SELECT 
+SELECT
     timestamp,
     factory_address,
     network,
@@ -216,6 +218,7 @@ SELECT
     transaction_index,
     log_index,
     transaction_hash,
+    true as reversed_swap,
     sign
 FROM evm_swaps_raw_transformed_mv as sr;
 
@@ -250,7 +253,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
     log_index           UInt16,
     transaction_hash    String,
     sign 			Int8
-) ENGINE MergeTree()
+) ENGINE CollapsingMergeTree(sign)
     ORDER BY (timestamp, token_a, dex_name, network)
     TTL timestamp + INTERVAL 360 DAY
     POPULATE
@@ -385,10 +388,10 @@ AS
 	    network,
 	    dex_name,
 	    token_a AS token_address,
-	    sum(ABS(amount_a * price_token_a_usd)) AS volume_usd
+	    sum(ABS(amount_a * price_token_a_usd * sign)) AS volume_usd
 	FROM evm_swap_parts_with_prices_mv
 	WHERE price_token_a_usd > 0
-	GROUP BY 
+	GROUP BY
 	    timestamp,
 	    network,
 	    dex_name,
