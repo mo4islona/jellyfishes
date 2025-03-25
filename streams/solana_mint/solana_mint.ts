@@ -105,8 +105,6 @@ export class SolanaMintStream extends PortalAbstractStream<SolanaMint> {
             return mints;
           });
 
-          if (!res.length) return;
-
           controller.enqueue(res);
         },
       }),

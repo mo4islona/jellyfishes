@@ -74,8 +74,6 @@ export class SolanaPumpfunTokensStream extends PortalAbstractStream<PumpfunToken
             return tokens;
           });
 
-          if (!res.length) return;
-
           controller.enqueue(res);
         },
       }),
