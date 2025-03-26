@@ -27,7 +27,7 @@ export abstract class AbstractState {
     return {
       timestamp: 0,
       number: 0,
-      hash: '',
+      parentBlockHash: '',
       ...(JSON.parse(offset) || {}),
     };
   }

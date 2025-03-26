@@ -61,7 +61,7 @@ const logged = new Map();
 export type Offset = {
   timestamp: number;
   number: number;
-  hash: string;
+  parentBlockHash?: string;
 };
 
 export type OptionalArgs<T> = T | undefined;
@@ -141,7 +141,6 @@ export abstract class PortalAbstractStream<
       if (this.toBlock) {
         return {
           number: this.toBlock,
-          hash: '',
           timestamp: 0,
         };
       }
@@ -149,7 +148,6 @@ export abstract class PortalAbstractStream<
       const latest = await headCall.get();
       return {
         number: latest?.number || 0,
-        hash: latest?.hash || '',
         // FIXME extract timestamp from the block?
         timestamp: 0,
       };
@@ -215,10 +213,10 @@ export abstract class PortalAbstractStream<
    */
   async getStream<
     Res extends PortalResponse & {
-      header: { number: number; hash: string; timestamp: number };
+      header: { number: number; timestamp: number };
     },
     Query extends Omit<PortalQuery, 'fromBlock' | 'toBlock'> & {
-      fields: { block: { number: boolean; hash: boolean; timestamp: boolean } };
+      fields: { block: { number: boolean; timestamp: boolean } };
     },
   >(req: Query): Promise<ReadableStream<PortalStreamData<Res>>> {
     // Get the last offset from the state
@@ -249,7 +247,6 @@ export abstract class PortalAbstractStream<
       block: {
         ...req.fields.block,
         number: true,
-        hash: true,
         timestamp: true,
       },
     };
@@ -259,7 +256,7 @@ export abstract class PortalAbstractStream<
         ...req,
         fromBlock: current.number,
         toBlock: this.toBlock,
-        parentBlockHash: current.hash,
+        parentBlockHash: current.parentBlockHash,
       },
       {},
     );
@@ -275,7 +272,7 @@ export abstract class PortalAbstractStream<
 
           this.offsets.push({
             number: lastBlock.header.number,
-            hash: lastBlock.header.hash,
+            parentBlockHash: data.finalizedHead?.hash,
             timestamp: lastBlock.header.timestamp,
           });
 
