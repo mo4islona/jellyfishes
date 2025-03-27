@@ -35,10 +35,13 @@ export function getConfig() {
       ? process.env.NETWORK
       : 'ethereum-mainnet';
 
+  const blockFrom = process.env.BLOCK_FROM ? parseInt(process.env.BLOCK_FROM) : 0;
+
   return {
     network: network as Network,
     factory: CONTRACTS.factory[network],
     dbPath: process.env.DB_PATH || './pools.db',
     portal: PORTAL[network],
+    blockFrom,
   };
 }

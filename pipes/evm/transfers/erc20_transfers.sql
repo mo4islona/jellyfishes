@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_transfers
     token             String,
     "from"            String,
     "to"              String,
-    amount            UInt64,
+    amount            Int256,
     block_number      UInt32 CODEC (DoubleDelta, ZSTD),
     transaction_index UInt16,
     log_index         UInt16,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_monthly_transfers
     account   String,
     token     String,
     count     UInt64,
-    amount    Int128
+    amount    Int256
 ) ENGINE = SummingMergeTree() ORDER BY (timestamp, token, account);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_monthly_transfers_mva TO evm_erc20_monthly_transfers AS
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_5m_transfers
     account   String,
     token     String,
     count     UInt32,
-    amount    Int128
+    amount    Int256
 ) ENGINE = SummingMergeTree()
     ORDER BY (timestamp, token, account)
     TTL timestamp + INTERVAL 60 DAY;
