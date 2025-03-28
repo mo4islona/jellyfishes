@@ -13,15 +13,19 @@
   "dependencies": {
     "@clickhouse/client": "^1.10.1",
     "@solana/spl-token": "^0.4.12",
+    "@subsquid/batch-processor": "^0.0.0",
     "@subsquid/evm-abi": "^0.3.1",
     "@subsquid/evm-codec": "^0.3.0",
     "@subsquid/portal-client": "0.0.1-portal-api.da1f68",
-    "@subsquid/solana-stream": "1.0.0-portal-api.da1f68",
+    "@subsquid/solana-objects": "^0.0.3",
+    "@subsquid/solana-stream": "^0.2.2",
+    "@subsquid/typeorm-store": "^1.5.1",
     "classic-level": "^2.0.0",
     "lodash": "^4.17.21",
     "pg": "^8.13.1",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
+    "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.20"
   }
 }
