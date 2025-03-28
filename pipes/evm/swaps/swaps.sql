@@ -368,7 +368,7 @@ AS
 	(	token_b NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 	)
-
+;
 -- Materialized view that shows token volumes in USD by dex_name in 5-minute intervals
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_volume_usd5min_mv
 (
@@ -397,6 +397,8 @@ AS
 	    dex_name,
 	    token_address
 	ORDER BY timestamp
+
+;
 
 -- Materialized view that generates 5-minute candlestick data for tokens
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
@@ -453,3 +455,28 @@ SELECT
     volume
 FROM aggregated_data
 ORDER BY timestamp, token, network;
+
+-- Materialized view to count swaps per token and network
+-- For example, can be used to filter out tokens with less than X swaps (garbage tokens).
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_swap_counts_mv
+(
+    token String,
+    network LowCardinality(String),
+    swap_count UInt64
+) ENGINE = SummingMergeTree()
+    ORDER BY (token, network)
+    POPULATE
+AS
+SELECT 
+    token_a AS token,
+    network,
+    sign AS swap_count
+FROM evm_swaps_raw
+
+UNION ALL
+
+SELECT 
+    token_b AS token,
+    network,
+    sign AS swap_count
+FROM evm_swaps_raw;

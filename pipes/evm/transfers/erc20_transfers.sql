@@ -16,6 +16,19 @@ CREATE TABLE IF NOT EXISTS evm_erc20_transfers
       ORDER BY (timestamp, transaction_index, log_index)
       TTL timestamp + INTERVAL 90 DAY;
 
+CREATE TABLE IF NOT EXISTS evm_erc20_holders
+(
+    timestamp         DateTime CODEC (DoubleDelta, ZSTD),
+    network           LowCardinality(String),
+    token             String,
+    holders			UInt32,
+    sign			Int8
+) ENGINE = CollapsingMergeTree(sign)
+      PARTITION BY toYYYYMM(timestamp)
+      ORDER BY (timestamp, network, token)
+      TTL timestamp + INTERVAL 90 DAY;
+
+
 -- ############################################################################################################
 --
 -- ############################################################################################################
