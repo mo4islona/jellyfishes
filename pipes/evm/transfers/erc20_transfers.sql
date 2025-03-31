@@ -92,3 +92,13 @@ SELECT toStartOfFiveMinutes(timestamp) as timestamp,
        sum(sign)                       as count
 FROM evm_erc20_transfers
 GROUP BY timestamp, token, "to";
+
+CREATE TABLE IF NOT EXISTS evm_erc20_first_mints
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    `network` LowCardinality(String),
+    `token` String,
+    `transactionHash` String
+)
+ENGINE = ReplacingMergeTree()
+ORDER BY (token, network);

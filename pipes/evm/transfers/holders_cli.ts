@@ -9,34 +9,55 @@ const config = getConfig();
 const clickhouse = createClickhouseClient();
 const logger = createLogger('erc20').child({ network: config.network });
 
+async function checkExistingRows(table: string): Promise<boolean> {
+  // Check if there are already rows in the specified table for this network
+  const checkQuery = `
+    SELECT count() as count
+    FROM ${table}
+    WHERE network = {network: String}
+  `;
+
+  const checkResult = await clickhouse.query({
+    query: checkQuery,
+    query_params: {
+      network: config.network,
+    },
+    format: 'JSONEachRow',
+  });
+
+  const rowCount = parseInt(((await checkResult.json()) as any)[0].count);
+  if (rowCount > 0) {
+    logger.error(
+      `Found ${rowCount} existing rows in ${table} for network ${config.network}. Exiting to prevent duplicate data.`,
+    );
+    return true;
+  }
+  return false;
+}
+
 async function main() {
+  if (!config.collectData) {
+    throw new Error('COLLECT_DATA is not set');
+  }
+
+  const toCollect = config.collectData.split(',').filter(Boolean);
+  const collectHolders = toCollect.includes('holders');
+  const collectFirstMints = toCollect.includes('first_mints');
+
   await ensureTables(clickhouse, path.join(__dirname, 'erc20_transfers.sql'));
 
   try {
-    // Check if there are already rows in evm_erc20_holders for this network
-    const checkQuery = `
-        SELECT count() as count
-        FROM evm_erc20_holders
-        WHERE network = {network: String}
-      `;
-
-    const checkResult = await clickhouse.query({
-      query: checkQuery,
-      query_params: {
-        network: config.network,
-      },
-      format: 'JSONEachRow',
-    });
-
-    const rowCount = parseInt(((await checkResult.json()) as any)[0].count);
-    if (rowCount > 0) {
-      logger.error(
-        `Found ${rowCount} existing rows in evm_erc20_holders for network ${config.network}. Exiting to prevent duplicate data.`,
-      );
+    if (collectHolders && (await checkExistingRows('evm_erc20_holders'))) {
       process.exit(1);
     }
 
-    logger.info('Starting to fetch ERC20 transfers...');
+    if (collectFirstMints && (await checkExistingRows('evm_erc20_first_mints'))) {
+      process.exit(1);
+    }
+
+    logger.info(
+      `Starting to fetch ${collectHolders ? 'holders' : ''} ${collectFirstMints ? 'first_mints' : ''}...`,
+    );
 
     // Query to fetch ERC20 transfers filtered by network.
     // We select only tra
@@ -71,22 +92,48 @@ async function main() {
       format: 'JSONEachRow',
     });
 
-    const holderCounter = new HolderCounter(logger, async (timestamp, holders) => {
-      const values = holders.map((h) => ({
-        timestamp,
-        network: config.network,
-        token: h.token,
-        holders: h.holderCount,
-        sign: 1,
-      }));
-      await clickhouse.insert({
-        table: 'evm_erc20_holders',
-        values,
-        format: 'JSONEachRow',
-      });
+    let firstMintsBuffer: {
+      timestamp: string;
+      network: string;
+      token: string;
+      transactionHash: string;
+    }[] = [];
 
-      totalInserted += values.length;
-    });
+    const holderCounter = new HolderCounter(
+      logger,
+      collectHolders
+        ? async (timestamp, holders) => {
+            const values = holders.map((h) => ({
+              timestamp,
+              network: config.network,
+              token: h.token,
+              holders: h.holderCount,
+              sign: 1,
+            }));
+            await clickhouse.insert({
+              table: 'evm_erc20_holders',
+              values,
+              format: 'JSONEachRow',
+            });
+            totalInserted += values.length;
+          }
+        : undefined,
+      collectFirstMints
+        ? async (timestamp, token, transactionHash) => {
+            firstMintsBuffer.push({ timestamp, network: config.network, token, transactionHash });
+
+            if (firstMintsBuffer.length >= 1000) {
+              logger.info(`Flushing ${firstMintsBuffer.length} first mints to ClickHouse`);
+              await clickhouse.insert({
+                table: 'evm_erc20_first_mints',
+                values: firstMintsBuffer,
+                format: 'JSONEachRow',
+              });
+              firstMintsBuffer = [];
+            }
+          }
+        : undefined,
+    );
 
     let countProcessed = 0;
     for await (const rows of resultSet.stream()) {
@@ -103,9 +150,19 @@ async function main() {
       }
     }
 
+    if (firstMintsBuffer.length > 0) {
+      logger.info(`Flushing last ${firstMintsBuffer.length} first mints to ClickHouse`);
+      await clickhouse.insert({
+        table: 'evm_erc20_first_mints',
+        values: firstMintsBuffer,
+        format: 'JSONEachRow',
+      });
+    }
+
     logger.info(
-      `Finished processing ERC20 transfers. ${countProcessed} rows read, ${totalInserted} rows added`,
+      `Finished processing ERC20 transfers. ${countProcessed} rows read, ${totalInserted} rows added. Final state:`,
     );
+    holderCounter.printState();
   } catch (error) {
     logger.error(`Error processing ERC20 transfers: ${error}`);
   }

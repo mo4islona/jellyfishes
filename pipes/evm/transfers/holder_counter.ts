@@ -11,16 +11,20 @@ type TokenHolders = {
 
 export type HoldersChangedCallback = (timestamp: string, holders: TokenHolders[]) => void;
 
+export type FirstMintCallback = (timestamp: string, token: string, transactionHash: string) => void;
+
 export class HolderCounter {
   private logger: Logger;
   private firstTransferFrom = new Map<string, string>(); // token address -> first from address
   private balances = new Map<string, Map<string, bigint>>(); // token -> address -> balance
   private holderCount = new Map<string, number>(); // token -> holders
   private lastStartOfFiveMinutesCallbackTimestamp?: Date;
+  private firstMintsCount = 0;
 
   constructor(
     logger: Logger,
-    private callback: HoldersChangedCallback,
+    private holdersChangedCallback?: HoldersChangedCallback,
+    private firstMintCallback?: FirstMintCallback,
   ) {
     this.logger = logger.child({
       module: 'HolderCounter',
@@ -40,10 +44,22 @@ export class HolderCounter {
       if (from !== ZERO_ADDRESS) {
         return;
       }
+      if (this.firstMintCallback) {
+        this.firstMintCallback(
+          this.formatTimestamp(this.parseTimestamp(transfer.timestamp)),
+          token,
+          transfer.transaction_hash,
+        );
+        this.firstMintsCount++;
+      }
     } else {
       if (firstFrom !== ZERO_ADDRESS) {
         return;
       }
+    }
+
+    if (!this.holdersChangedCallback) {
+      return;
     }
 
     let newHolderCount = this.holderCount.get(token) || 0;
@@ -87,7 +103,7 @@ export class HolderCounter {
         holderCount,
       }));
 
-      this.callback(timestamp, holders);
+      this.holdersChangedCallback(timestamp, holders);
     }
   }
 
@@ -105,6 +121,7 @@ export class HolderCounter {
       [
         `Tokens tracked: ${this.holderCount.size}`,
         `First transfers: ${this.firstTransferFrom.size}`,
+        `First mints: ${this.firstMintsCount}`,
         `Max token holders: ${maxTokenOwners}`,
         `Min token holders: ${minTokenOwners}`,
         `Avg. token holders: ${Math.floor(totalOwners / tokenBalances.length)}`,
