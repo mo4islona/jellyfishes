@@ -369,6 +369,38 @@ AS
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 	)
 ;
+
+-- Same as evm_swap_parts_with_prices_mv but with different ordering key
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices2_mv
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    network         LowCardinality(String),
+    dex_name        LowCardinality(String),
+    token_a         String,
+    price_token_a_usd Float64,
+    price_token_a_eth Float64,
+    price_eth_usd   Float64,
+    swap_type       String,
+    token_b             String,
+    amount_a_raw        Int128,
+    amount_b_raw        Int128,
+    amount_a            Float64,
+    amount_b            Float64,
+    account             String,
+    block_number        UInt32 CODEC (DoubleDelta, ZSTD),
+    transaction_index   UInt16,
+    log_index           UInt16,
+    transaction_hash    String,
+    sign            Int8
+) ENGINE MergeTree()
+    ORDER BY (token_a, network, timestamp)
+    TTL timestamp + INTERVAL 360 DAY
+    POPULATE
+AS
+SELECT *
+FROM evm_swap_parts_with_prices_mv;
+
+
 -- Materialized view that shows token volumes in USD by dex_name in 5-minute intervals
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_volume_usd5min_mv
 (
@@ -480,3 +512,51 @@ SELECT
     network,
     sign AS swap_count
 FROM evm_swaps_raw;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_vols_mv
+(
+    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
+    network             LowCardinality(String),
+    token               String,
+    price_token_usd     Float64,
+    amount              Float64,
+    volume_5min         Float64,
+    volume_1hr          Float64,
+    volume_6hr          Float64,
+    volume_24hr         Float64,
+    sign                Int8
+) ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(timestamp)
+    ORDER BY (timestamp, token, network)
+    TTL timestamp + INTERVAL 90 DAY
+	POPULATE
+AS
+SELECT
+    timestamp,
+    network,
+    token_a AS token,
+    price_token_a_usd AS price_token_usd,
+    amount_a AS amount,
+    	sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 300 PRECEDING AND CURRENT ROW
+    ) AS volume_5min,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 3600 PRECEDING AND CURRENT ROW
+    ) AS volume_1hr,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 21600 PRECEDING AND CURRENT ROW
+    ) AS volume_6hr,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 86400 PRECEDING AND CURRENT ROW
+    ) AS volume_24hr,
+    sign
+FROM evm_swap_parts_with_prices2_mv
+WHERE price_token_usd > 0;

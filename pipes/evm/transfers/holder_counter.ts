@@ -9,9 +9,13 @@ type TokenHolders = {
   holderCount: number;
 };
 
-export type HoldersChangedCallback = (timestamp: string, holders: TokenHolders[]) => void;
+export type HoldersChangedCallback = (timestamp: string, holders: TokenHolders[]) => Promise<void>;
 
-export type FirstMintCallback = (timestamp: string, token: string, transactionHash: string) => void;
+export type FirstMintCallback = (
+  timestamp: string,
+  token: string,
+  transactionHash: string,
+) => Promise<void>;
 
 export class HolderCounter {
   private logger: Logger;
@@ -45,7 +49,7 @@ export class HolderCounter {
         return;
       }
       if (this.firstMintCallback) {
-        this.firstMintCallback(
+        await this.firstMintCallback(
           this.formatTimestamp(this.parseTimestamp(transfer.timestamp)),
           token,
           transfer.transaction_hash,
@@ -103,7 +107,7 @@ export class HolderCounter {
         holderCount,
       }));
 
-      this.holdersChangedCallback(timestamp, holders);
+      await this.holdersChangedCallback(timestamp, holders);
     }
   }
 

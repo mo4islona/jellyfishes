@@ -65,19 +65,17 @@ async function main() {
         WITH active_tokens AS (
             SELECT token, network, swap_count
             FROM evm_token_swap_counts_mv FINAL
-            WHERE network = {network: String}
+            WHERE network = {network: String} 
                 AND swap_count > 1000
         ),
-        active_transfers AS (
+        active_token_transfers AS (
             SELECT *
             FROM evm_erc20_transfers t
-            WHERE network = {network: String} AND (
-		        "from" IN (SELECT token FROM active_tokens ac_t) OR "to" IN (SELECT token FROM active_tokens ac_t)
-	        )
+            WHERE network = {network: String} AND "token" IN (SELECT token FROM active_tokens ac_t)
             ORDER BY timestamp, transaction_index, log_index
         )
         SELECT *
-        FROM active_transfers
+        FROM active_token_transfers
     `;
 
     let totalInserted = 0;
@@ -122,14 +120,15 @@ async function main() {
         ? async (timestamp, token, transactionHash) => {
             firstMintsBuffer.push({ timestamp, network: config.network, token, transactionHash });
 
-            if (firstMintsBuffer.length >= 1000) {
+            if (firstMintsBuffer.length >= 100) {
               logger.info(`Flushing ${firstMintsBuffer.length} first mints to ClickHouse`);
+              const values = firstMintsBuffer.map((m) => ({ ...m }));
+              firstMintsBuffer = [];
               await clickhouse.insert({
                 table: 'evm_erc20_first_mints',
-                values: firstMintsBuffer,
+                values,
                 format: 'JSONEachRow',
               });
-              firstMintsBuffer = [];
             }
           }
         : undefined,
@@ -141,7 +140,7 @@ async function main() {
         const transfer = row.json() as any;
         await holderCounter.processTransfer(transfer);
         countProcessed++;
-        if (countProcessed % 1_000_000 === 0) {
+        if (countProcessed % 500_000 === 0) {
           logger.info(
             `Processed ${countProcessed} rows, current date ${transfer.timestamp}, inserted ${totalInserted}`,
           );
@@ -151,7 +150,7 @@ async function main() {
     }
 
     if (firstMintsBuffer.length > 0) {
-      logger.info(`Flushing last ${firstMintsBuffer.length} first mints to ClickHouse`);
+      logger.info(`Flushing last ${firstMintsBuffer.length} mints to ClickHouse`);
       await clickhouse.insert({
         table: 'evm_erc20_first_mints',
         values: firstMintsBuffer,
