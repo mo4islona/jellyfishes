@@ -560,3 +560,42 @@ SELECT
     sign
 FROM evm_swap_parts_with_prices2_mv
 WHERE price_token_usd > 0;
+
+/* 
+ * Token price, volumes and holders - every minute.
+ * Holders sometimes can be zero since holders are collected every 5 minutes, while prices are every minute.
+ */
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_prices_vols_holders_mv
+ENGINE = ReplacingMergeTree()
+ORDER BY (timestamp, token, network)
+POPULATE
+AS
+	SELECT toStartOfMinute(pp.timestamp) AS timestamp
+		, pp.token AS token
+		, pp.network AS network
+		, argMin(pp.price_token_usd, pp.timestamp) AS price_token_usd
+		, argMin(pp.volume_5min, pp.timestamp) AS volume_5min_usd
+		, argMin(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
+		, argMin(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
+		, argMin(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+		, argMax(hh.holders, hh.timestamp) AS holders
+	FROM evm_swap_parts_with_prices_vols_mv pp
+		/*
+		 * Here goes the trick from https://stackoverflow.com/questions/75243697/joining-large-tables-in-clickhouse-out-of-memory-or-slow
+		 * Naive join with evm_erc20_holders does not work since this table is huge and request runs out of memory.
+		 * We just join with (thus load into memory) small portion of evm_erc20_holders, only for the data being inserted into
+		 * evm_swap_parts_with_prices_vols_mv (not all rows).
+		 */
+		ASOF LEFT JOIN (
+			SELECT * FROM evm_erc20_holders
+			WHERE
+				timestamp <= (SELECT MAX(timestamp) FROM evm_swap_parts_with_prices_vols_mv)
+				-- subtract 5 minutes from min timestamp since holders are given in 5 minute intervals.
+				AND timestamp >= (SELECT subtractMinutes(MIN(timestamp), 5) FROM evm_swap_parts_with_prices_vols_mv)
+				AND (network, token) IN (SELECT network, token FROM evm_swap_parts_with_prices_vols_mv)
+			) hh ON
+			hh.timestamp <= pp.timestamp AND hh.network = pp.network AND hh.token = pp.token
+	WHERE
+		token IN (SELECT token FROM evm_erc20_first_mints)
+	GROUP BY timestamp, token, network
+	ORDER BY timestamp, token, network;
