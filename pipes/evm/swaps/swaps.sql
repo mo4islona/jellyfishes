@@ -432,61 +432,63 @@ AS
 
 ;
 
--- Materialized view that generates 5-minute candlestick data for tokens
+-- Materialized view that generates 5-minute candlestick data for tokens + holders
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
 (
     timestamp DateTime CODEC (DoubleDelta, ZSTD),
-    network LowCardinality(String),
     token String,
-    open Float64,
-    high Float64,
-    low Float64,
-    close Float64,
-    volume Float64
+    network LowCardinality(String),    
+    open_price_token_usd Float64,
+    high_price_token_usd Float64,
+    low_price_token_usd	Float64,
+    close_price_token_usd Float64,
+    volume_5min_usd	Float64,
+    volume_1hr_usd	Float64,
+    volume_6hr_usd	Float64,
+    volume_24hr_usd	Float64,
+    holders	UInt32
 ) ENGINE = ReplacingMergeTree()
     PARTITION BY toYYYYMM(timestamp)
     ORDER BY (timestamp, token, network)
     TTL timestamp + INTERVAL 360 DAY
     POPULATE
 AS
-WITH price_points AS (
     SELECT
-        toStartOfFiveMinutes(timestamp) AS interval_start,
-        network,
-        token_a AS token,
-        price_token_a_usd AS price,
-        amount_a AS amount,
-        timestamp
-    FROM evm_swap_parts_with_prices_mv
-    WHERE price_token_a_usd < 500 AND price_token_a_usd !=0 --AND timestamp > '2025-03-18 00:00:00' AND token_a = '0xbc45647ea894030a4e9801ec03479739fa2485f0'
-),
-aggregated_data AS (
-    SELECT
-        interval_start,
-        network,
-        token,
-        argMin(price, timestamp) AS open_price,
-        max(price) AS high_price,
-        min(price) AS low_price,
-        argMax(price, timestamp) AS close_price,
-        sum(abs(amount)) AS volume
-    FROM price_points
-    GROUP BY
-        interval_start,
-        network,
-        token
-)
-SELECT
-    interval_start AS timestamp,
-    network,
-    token,
-    open_price AS open,
-    high_price AS high,
-    low_price AS low,
-    close_price AS close,
-    volume
-FROM aggregated_data
-ORDER BY timestamp, token, network;
+        toStartOfFiveMinutes(timestamp) AS timestamp
+        , pp.token
+        , pp.network
+	    , argMin(price_token_usd, pp.timestamp) AS open_price_token_usd
+	    , max(price_token_usd) AS high_price_token_usd
+	    , min(price_token_usd) AS low_price_token_usd
+	    , argMax(price_token_usd, pp.timestamp) AS close_price_token_usd
+		, argMax(pp.volume_5min, pp.timestamp) AS volume_5min_usd
+		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
+		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
+		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+		, argMax(hh.holders, hh.timestamp) AS holders
+    FROM evm_swap_parts_with_prices_vols_mv pp
+		/*
+		 * Here goes the trick from https://stackoverflow.com/questions/75243697/joining-large-tables-in-clickhouse-out-of-memory-or-slow
+		 * Naive join with evm_erc20_holders does not work since this table is huge and request runs out of memory.
+		 * We just join with (thus load into memory) small portion of evm_erc20_holders, only for the data being inserted into
+		 * evm_swap_parts_with_prices_vols_mv (not all rows).
+		 */
+		ASOF LEFT JOIN (
+			SELECT * FROM evm_erc20_holders
+			WHERE
+				timestamp <= (SELECT MAX(timestamp) FROM evm_swap_parts_with_prices_vols_mv)
+				-- subtract 5 minutes from min timestamp since holders are given in 5 minute intervals.
+				AND timestamp >= (SELECT subtractMinutes(MIN(timestamp), 5) FROM evm_swap_parts_with_prices_vols_mv)
+				AND (network, token) IN (SELECT network, token FROM evm_swap_parts_with_prices_vols_mv)
+			) hh ON
+			hh.timestamp <= pp.timestamp AND 
+			hh.network = pp.network AND hh.token = pp.token
+    WHERE 
+    	price_token_usd < 500 AND price_token_usd != 0
+    	AND token IN (SELECT token FROM evm_erc20_first_mints)
+	GROUP BY timestamp, token, network
+	ORDER BY timestamp, token, network;
+
 
 -- Materialized view to count swaps per token and network
 -- For example, can be used to filter out tokens with less than X swaps (garbage tokens).
@@ -573,11 +575,11 @@ AS
 	SELECT toStartOfMinute(pp.timestamp) AS timestamp
 		, pp.token AS token
 		, pp.network AS network
-		, argMin(pp.price_token_usd, pp.timestamp) AS price_token_usd
-		, argMin(pp.volume_5min, pp.timestamp) AS volume_5min_usd
-		, argMin(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
-		, argMin(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
-		, argMin(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+		, argMax(pp.price_token_usd, pp.timestamp) AS price_token_usd
+		, argMax(pp.volume_5min, pp.timestamp) AS volume_5min_usd
+		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
+		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
+		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
 		, argMax(hh.holders, hh.timestamp) AS holders
 	FROM evm_swap_parts_with_prices_vols_mv pp
 		/*

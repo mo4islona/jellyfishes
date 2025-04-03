@@ -34,7 +34,7 @@ def display_candlestick(value):
         df = pd.read_csv(csv_file_path)
         
         # Check if the required columns exist
-        required_columns = ['timestamp', 'open', 'high', 'low', 'close']
+        required_columns = ['timestamp', 'open_price_token_usd', 'high_price_token_usd', 'low_price_token_usd', 'close_price_token_usd']
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
@@ -44,10 +44,10 @@ def display_candlestick(value):
         
         fig = go.Figure(go.Candlestick(
             x=df['timestamp'],
-            open=df['open'],
-            high=df['high'],
-            low=df['low'],
-            close=df['close']
+            open=df['open_price_token_usd'],
+            high=df['high_price_token_usd'],
+            low=df['low_price_token_usd'],
+            close=df['close_price_token_usd']
         ))
 
         fig.update_layout(
