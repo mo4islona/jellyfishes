@@ -22,7 +22,7 @@ async function main() {
       }),
     },
     args: {
-      fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 240_000_000,
+      fromBlock: process.env.FROM_BLOCK ? parseInt(process.env.FROM_BLOCK) : 317617480,
       toBlock: process.env.TO_BLOCK ? parseInt(process.env.TO_BLOCK) : undefined,
       dbPath: './liquidity.db',
     },

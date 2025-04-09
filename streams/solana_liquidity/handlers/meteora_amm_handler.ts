@@ -228,6 +228,28 @@ export class MeteoraAmmHandler extends BaseHandler {
           bVault: tokenBReservesAccount,
         },
       } = meteoraDamm.instructions.initializePermissionedPool.decode(instruction));
+    } else if(descriptor === meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8) {
+        ({
+            accounts: {
+            lpMint,
+            tokenAMint,
+            tokenBMint,
+            aVault: tokenAReservesAccount,
+            bVault: tokenBReservesAccount,
+            },
+            data: { tokenAAmount, tokenBAmount },
+        } = meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.decode(instruction));
+    } else if(descriptor === meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8) {
+        ({
+            accounts: {
+            lpMint,
+            tokenAMint,
+            tokenBMint,
+            aVault: tokenAReservesAccount,
+            bVault: tokenBReservesAccount,
+            },
+            data: { tokenAAmount, tokenBAmount },
+        } = meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.decode(instruction));
     } else {
       ({
         accounts: {
