@@ -1,6 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Highcharts from 'highcharts/highstock';
-import HighchartsReact from 'highcharts-react-official';
+import ErrorIcon from '@mui/icons-material/Error';
 import {
   Box,
   Chip,
@@ -8,11 +6,13 @@ import {
   Grid,
   Paper,
   TextField,
-  Typography,
   ToggleButton,
   ToggleButtonGroup,
+  Typography,
 } from '@mui/material';
-import ErrorIcon from '@mui/icons-material/Error';
+import HighchartsReact from 'highcharts-react-official';
+import Highcharts from 'highcharts/highstock';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useClickhouseData } from '../hooks/useClickhouseData';
 
 // Define timeframe options
@@ -135,17 +135,17 @@ const CandlestickChart: React.FC = () => {
             size="small"
           />
         </Grid>
-        {/*<Grid item xs={12} md={6}>*/}
-        {/*  <TextField*/}
-        {/*    label="Token B (USDC)"*/}
-        {/*    value={inputTokenB}*/}
-        {/*    onChange={(e) => setInputTokenB(e.target.value)}*/}
-        {/*    onBlur={handleTokenBBlur}*/}
-        {/*    required*/}
-        {/*    fullWidth*/}
-        {/*    size="small"*/}
-        {/*  />*/}
-        {/*</Grid>*/}
+        <Grid item xs={12} md={6}>
+          <TextField
+            label="Token B"
+            value={inputTokenB}
+            onChange={(e) => setInputTokenB(e.target.value)}
+            onBlur={handleTokenBBlur}
+            required
+            fullWidth
+            size="small"
+          />
+        </Grid>
       </Grid>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

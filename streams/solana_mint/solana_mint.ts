@@ -97,7 +97,11 @@ export class SolanaMintStream extends PortalAbstractStream<SolanaMint> {
                   hash: txHash,
                   index: ins.transactionIndex,
                 },
-                block: { number: block.header.number, hash: block.header.hash },
+                block: {
+                  number: block.header.number,
+                  hash: block.header.hash,
+                  timestamp: block.header.timestamp,
+                },
                 timestamp: new Date(block.header.timestamp * 1000),
               });
             }

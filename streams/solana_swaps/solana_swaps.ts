@@ -149,7 +149,7 @@ export class SolanaSwapsStream extends PortalAbstractStream<
       }),
     });
 
-    return source.pipeThrough(
+    const stream = source.pipeThrough(
       new TransformStream({
         transform: ({ blocks }, controller) => {
           // FIXME
@@ -216,7 +216,11 @@ export class SolanaSwapsStream extends PortalAbstractStream<
               swaps.push({
                 id: `${txHash}/${ins.transactionIndex}`,
                 type: swap.type,
-                block: { number: block.header.number, hash: block.header.hash },
+                block: {
+                  number: block.header.number,
+                  hash: block.header.hash,
+                  timestamp: block.header.timestamp,
+                },
                 instruction: {
                   address: ins.instructionAddress,
                 },
@@ -246,5 +250,7 @@ export class SolanaSwapsStream extends PortalAbstractStream<
         },
       }),
     );
+
+    return stream;
   }
 }
