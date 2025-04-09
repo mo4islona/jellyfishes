@@ -96,7 +96,11 @@ export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenM
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: { number: block.header.number, hash: block.header.hash },
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
                   };
                 }
@@ -113,7 +117,11 @@ export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenM
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: { number: block.header.number, hash: block.header.hash },
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
                   };
                 }
@@ -130,7 +138,11 @@ export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenM
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: { number: block.header.number, hash: block.header.hash },
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
                   };
                 }

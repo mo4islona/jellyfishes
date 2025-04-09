@@ -16,6 +16,7 @@ export type Logger = PinoLogger;
 export type BlockRef = {
   number: number;
   hash: string;
+  timestamp: number;
 };
 
 export type TransactionRef = {

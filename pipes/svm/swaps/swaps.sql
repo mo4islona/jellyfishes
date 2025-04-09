@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS solana_swaps_raw
     token_a             String,
     token_b             String,   -- SOL, USDC, USDT
     amount_a            Float64,
-    amount_b            Float64,  
+    amount_b            Float64,
+    token_a_usdc_price  Float64,
     account             String,
     block_number        UInt32 CODEC (DoubleDelta, ZSTD),
     transaction_index   UInt16,
@@ -24,12 +25,12 @@ SELECT toStartOfFiveMinute(timestamp)                     as timestamp,
        token_a,
        token_b,
        dex,
-       argMinState(abs(amount_b / amount_a), timestamp) AS open,    -- no reorg support
-       maxState(abs(amount_b / amount_a))               AS high,    -- no reorg support
-       minState(abs(amount_b / amount_a))               AS low,     -- no reorg support
-       argMaxState(abs(amount_b / amount_a), timestamp) AS close,   -- no reorg support
-       sumState(sign)                                   AS count,   -- supports blockhain reorgs
-       sumState(abs(amount_b) * sign)                   AS volume_b -- supports blockhain reorgs
+       argMinState(token_a_usdc_price, timestamp) AS open,    -- no reorg support
+       maxState(token_a_usdc_price)               AS high,    -- no reorg support
+       minState(token_a_usdc_price)               AS low,     -- no reorg support
+       argMaxState(token_a_usdc_price, timestamp) AS close,   -- no reorg support
+       sumState(sign)                                     AS count,   -- supports blockhain reorgs
+       sumState(abs(amount_a * token_a_usdc_price) * sign)        AS volume_usdc -- supports blockhain reorgs
 from solana_swaps_raw
 WHERE amount_a != 0
   AND amount_b != 0

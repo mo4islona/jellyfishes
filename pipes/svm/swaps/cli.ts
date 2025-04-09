@@ -4,11 +4,12 @@ import { ClickhouseState } from '../../../core/states/clickhouse_state';
 import { SolanaSwapsStream } from '../../../streams/solana_swaps/solana_swaps';
 import { createClickhouseClient, ensureTables, toUnixTime } from '../../clickhouse';
 import { createLogger } from '../../utils';
+import { SvmUsdcAmountsAggregatorStream } from './usdc_prices';
 import { getSortFunction } from './util';
 
 const TRACKED_TOKENS = [
   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  // 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
   'So11111111111111111111111111111111111111112', // SOL
 ];
 
@@ -50,7 +51,9 @@ async function main() {
 
   await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
 
-  for await (const swaps of await ds.stream()) {
+  const stream = await ds.stream();
+
+  for await (const swaps of stream.pipeThrough(await new SvmUsdcAmountsAggregatorStream().pipe())) {
     await clickhouse.insert({
       table: 'solana_swaps_raw',
       values: swaps
@@ -73,7 +76,6 @@ async function main() {
             account: s.account,
             token_a: tokenA.mint,
             token_b: tokenB.mint,
-            a_to_b: !needTokenSwap,
             amount_a: (
               ((needTokenSwap ? 1 : -1) * Number(tokenA.amount)) /
               10 ** tokenA.decimals
@@ -82,6 +84,7 @@ async function main() {
               ((needTokenSwap ? -1 : 1) * Number(tokenB.amount)) /
               10 ** tokenB.decimals
             ).toString(),
+            token_a_usdc_price: tokenA.usdc_price,
             timestamp: toUnixTime(s.timestamp),
             sign: 1,
           };
