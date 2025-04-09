@@ -3,11 +3,36 @@ import { createClickhouseClient, ensureTables, toUnixTime } from '../../clickhou
 import { createLogger, formatNumber } from '../../utils';
 import { getConfig } from '../config';
 import { HolderCounter } from './holder_counter';
-
+import { createClient } from '@clickhouse/client';
+import { ClickHouseLogLevel } from '@clickhouse/client-common';
 const config = getConfig();
 
-const clickhouse = createClickhouseClient();
-const logger = createLogger('erc20').child({ network: config.network });
+const clickhouse = createClient({
+  url: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+  username: process.env.CLICKHOUSE_USER || 'default',
+  password: process.env.CLICKHOUSE_PASSWORD || '',
+  request_timeout: 400_000,
+  clickhouse_settings: {
+    send_progress_in_http_headers: 1,
+    http_headers_progress_interval_ms: '110000',
+  },
+  log: {
+    level: ClickHouseLogLevel.ERROR,
+  },
+});
+const logger = createLogger('erc20');
+logger.info('extended logging added');
+
+async function tryMultipleTimes<T>(f: () => Promise<T>, whatInserting: string) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await f();
+    } catch (e) {
+      logger.error(`Error inserting ${whatInserting}: ${e}`);
+    }
+  }
+  throw new Error(`Failed to insert ${whatInserting} after 3 attempts`);
+}
 
 async function checkExistingRows(table: string): Promise<boolean> {
   // Check if there are already rows in the specified table for this network
@@ -108,11 +133,16 @@ async function main() {
               holders: h.holderCount,
               sign: 1,
             }));
-            await clickhouse.insert({
-              table: 'evm_erc20_holders',
-              values,
-              format: 'JSONEachRow',
-            });
+
+            await tryMultipleTimes(
+              async () =>
+                clickhouse.insert({
+                  table: 'evm_erc20_holders',
+                  values,
+                  format: 'JSONEachRow',
+                }),
+              'holders',
+            );
             totalInserted += values.length;
           }
         : undefined,
@@ -124,11 +154,16 @@ async function main() {
               logger.info(`Flushing ${firstMintsBuffer.length} first mints to ClickHouse`);
               const values = firstMintsBuffer.map((m) => ({ ...m }));
               firstMintsBuffer = [];
-              await clickhouse.insert({
-                table: 'evm_erc20_first_mints',
-                values,
-                format: 'JSONEachRow',
-              });
+
+              await tryMultipleTimes(
+                async () =>
+                  clickhouse.insert({
+                    table: 'evm_erc20_first_mints',
+                    values,
+                    format: 'JSONEachRow',
+                  }),
+                'first_mints',
+              );
             }
           }
         : undefined,
@@ -138,6 +173,12 @@ async function main() {
     for await (const rows of resultSet.stream()) {
       for (const row of rows) {
         const transfer = row.json() as any;
+
+        if (transfer.exception) {
+          logger.error(`CH error: ${transfer.exception}`);
+          process.exit(1);
+        }
+
         await holderCounter.processTransfer(transfer);
         countProcessed++;
         if (countProcessed % 500_000 === 0) {
@@ -164,6 +205,9 @@ async function main() {
     holderCounter.printState();
   } catch (error) {
     logger.error(`Error processing ERC20 transfers: ${error}`);
+    if (error instanceof Error) {
+      logger.error(`Error stack trace: ${error.stack}`);
+    }
   }
 }
 

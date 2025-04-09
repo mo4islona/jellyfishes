@@ -21,7 +21,7 @@ export class HolderCounter {
   private logger: Logger;
   private firstTransferFrom = new Map<string, string>(); // token address -> first from address
   private balances = new Map<string, Map<string, bigint>>(); // token -> address -> balance
-  private holderCount = new Map<string, number>(); // token -> holders
+  private tokenHolderCount = new Map<string, number>(); // token -> holders
   private lastStartOfFiveMinutesCallbackTimestamp?: Date;
   private firstMintsCount = 0;
 
@@ -39,6 +39,7 @@ export class HolderCounter {
     const from = transfer.from;
     const to = transfer.to;
     const token = transfer.token;
+
     const amount = BigInt(transfer.amount);
 
     const firstFrom = this.firstTransferFrom.get(token);
@@ -66,7 +67,7 @@ export class HolderCounter {
       return;
     }
 
-    let newHolderCount = this.holderCount.get(token) || 0;
+    let newHolderCount = this.tokenHolderCount.get(token) || 0;
 
     // from balance handle
     if (from !== ZERO_ADDRESS) {
@@ -90,7 +91,7 @@ export class HolderCounter {
       if (oldToBal === 0n && newToBal > 0n) {
         newHolderCount++;
       }
-      this.holderCount.set(token, newHolderCount);
+      this.tokenHolderCount.set(token, newHolderCount);
       this.setBalance(token, to, newToBal);
     }
 
@@ -102,7 +103,7 @@ export class HolderCounter {
       this.lastStartOfFiveMinutesCallbackTimestamp = startOf5Min;
       const timestamp = this.formatTimestamp(startOf5Min);
 
-      const holders = Array.from(this.holderCount.entries()).map(([token, holderCount]) => ({
+      const holders = Array.from(this.tokenHolderCount.entries()).map(([token, holderCount]) => ({
         token,
         holderCount,
       }));
@@ -123,13 +124,13 @@ export class HolderCounter {
     }
     this.logger.info(
       [
-        `Tokens tracked: ${this.holderCount.size}`,
-        `First transfers: ${this.firstTransferFrom.size}`,
-        `First mints: ${this.firstMintsCount}`,
-        `Max token holders: ${maxTokenOwners}`,
-        `Min token holders: ${minTokenOwners}`,
-        `Avg. token holders: ${Math.floor(totalOwners / tokenBalances.length)}`,
-      ].join('\n'),
+        `tokenHolderCount: ${this.tokenHolderCount.size}`,
+        `firstTransferFrom: ${this.firstTransferFrom.size}`,
+        `firstMintsCount: ${this.firstMintsCount}`,
+        `maxTokenOwners: ${maxTokenOwners}`,
+        `minTokenOwners: ${minTokenOwners}`,
+        `avgTokenHolders: ${Math.floor(totalOwners / tokenBalances.length)}`,
+      ].join(' '),
     );
   }
 
