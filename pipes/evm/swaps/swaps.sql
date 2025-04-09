@@ -25,6 +25,33 @@ CREATE TABLE IF NOT EXISTS evm_swaps_raw
 --
 -- ############################################################################################################
 
+
+-- Materialized view to count swaps per token and network
+-- For example, can be used to filter out tokens with less than X swaps (garbage tokens).
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_swap_counts_mv
+(
+    token String,
+    network LowCardinality(String),
+    swap_count UInt64
+) ENGINE = SummingMergeTree()
+    ORDER BY (token, network)
+    POPULATE
+AS
+SELECT 
+    token_a AS token,
+    network,
+    sign AS swap_count
+FROM evm_swaps_raw
+
+UNION ALL
+
+SELECT 
+    token_b AS token,
+    network,
+    sign AS swap_count
+FROM evm_swaps_raw;
+
+
 -- Materialized view that transforms swap data using token information from evm_tokens
 -- TODO: slow to create, consider refactoring.
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swaps_raw_transformed_mv
@@ -254,7 +281,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_mv
     transaction_hash    String,
     sign 			Int8
 ) ENGINE CollapsingMergeTree(sign)
-    ORDER BY (timestamp, token_a, dex_name, network)
+    ORDER BY (timestamp, token_a, dex_name, network, transaction_index, log_index)
     TTL timestamp + INTERVAL 360 DAY
     POPULATE
 AS
@@ -488,32 +515,6 @@ AS
     	AND token IN (SELECT token FROM evm_erc20_first_mints)
 	GROUP BY timestamp, token, network
 	ORDER BY timestamp, token, network;
-
-
--- Materialized view to count swaps per token and network
--- For example, can be used to filter out tokens with less than X swaps (garbage tokens).
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_swap_counts_mv
-(
-    token String,
-    network LowCardinality(String),
-    swap_count UInt64
-) ENGINE = SummingMergeTree()
-    ORDER BY (token, network)
-    POPULATE
-AS
-SELECT 
-    token_a AS token,
-    network,
-    sign AS swap_count
-FROM evm_swaps_raw
-
-UNION ALL
-
-SELECT 
-    token_b AS token,
-    network,
-    sign AS swap_count
-FROM evm_swaps_raw;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_vols_mv
 (
