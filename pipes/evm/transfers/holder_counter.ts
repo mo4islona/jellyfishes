@@ -132,6 +132,7 @@ export class HolderCounter {
         `avgTokenHolders: ${Math.floor(totalOwners / tokenBalances.length)}`,
       ].join(' '),
     );
+    // TODO: print memory usage https://dev.to/evle/what-exactly-is-the-memory-limit-of-nodejs-4cpi
   }
 
   private parseTimestamp(dateString: string): Date {

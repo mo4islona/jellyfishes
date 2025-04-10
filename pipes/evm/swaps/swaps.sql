@@ -455,9 +455,55 @@ AS
 	    network,
 	    dex_name,
 	    token_address
-	ORDER BY timestamp
+	ORDER BY timestamp;
 
-;
+CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_vols_mv
+(
+    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
+    network             LowCardinality(String),
+    token               String,
+    price_token_usd     Float64,
+    amount              Float64,
+    volume_5min         Float64,
+    volume_1hr          Float64,
+    volume_6hr          Float64,
+    volume_24hr         Float64,
+    sign                Int8
+) ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(timestamp)
+    ORDER BY (timestamp, token, network)
+    TTL timestamp + INTERVAL 90 DAY
+	POPULATE
+AS
+SELECT
+    timestamp,
+    network,
+    token_a AS token,
+    price_token_a_usd AS price_token_usd,
+    amount_a AS amount,
+    	sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 300 PRECEDING AND CURRENT ROW
+    ) AS volume_5min,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 3600 PRECEDING AND CURRENT ROW
+    ) AS volume_1hr,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 21600 PRECEDING AND CURRENT ROW
+    ) AS volume_6hr,
+        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 86400 PRECEDING AND CURRENT ROW
+    ) AS volume_24hr,
+    sign
+FROM evm_swap_parts_with_prices2_mv
+WHERE price_token_usd > 0;
 
 -- Materialized view that generates 5-minute candlestick data for tokens + holders
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
@@ -516,53 +562,6 @@ AS
 	GROUP BY timestamp, token, network
 	ORDER BY timestamp, token, network;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_vols_mv
-(
-    timestamp           DateTime CODEC (DoubleDelta, ZSTD),
-    network             LowCardinality(String),
-    token               String,
-    price_token_usd     Float64,
-    amount              Float64,
-    volume_5min         Float64,
-    volume_1hr          Float64,
-    volume_6hr          Float64,
-    volume_24hr         Float64,
-    sign                Int8
-) ENGINE = MergeTree()
-    PARTITION BY toYYYYMM(timestamp)
-    ORDER BY (timestamp, token, network)
-    TTL timestamp + INTERVAL 90 DAY
-	POPULATE
-AS
-SELECT
-    timestamp,
-    network,
-    token_a AS token,
-    price_token_a_usd AS price_token_usd,
-    amount_a AS amount,
-    	sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
-        PARTITION BY token_a, network
-        ORDER BY timestamp
-        RANGE BETWEEN 300 PRECEDING AND CURRENT ROW
-    ) AS volume_5min,
-        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
-        PARTITION BY token_a, network
-        ORDER BY timestamp
-        RANGE BETWEEN 3600 PRECEDING AND CURRENT ROW
-    ) AS volume_1hr,
-        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
-        PARTITION BY token_a, network
-        ORDER BY timestamp
-        RANGE BETWEEN 21600 PRECEDING AND CURRENT ROW
-    ) AS volume_6hr,
-        sum(abs(IF(isNaN(amount_a * price_token_a_usd), 0, amount_a * price_token_a_usd))*sign) OVER (
-        PARTITION BY token_a, network
-        ORDER BY timestamp
-        RANGE BETWEEN 86400 PRECEDING AND CURRENT ROW
-    ) AS volume_24hr,
-    sign
-FROM evm_swap_parts_with_prices2_mv
-WHERE price_token_usd > 0;
 
 /* 
  * Token price, volumes and holders - every minute.

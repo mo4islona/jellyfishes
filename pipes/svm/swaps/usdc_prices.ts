@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { Logger as PinoLogger, pino } from 'pino';
 import { SolanaSwap } from '../../../streams/solana_swaps/solana_swaps';
 import { getSortFunction } from './util';
 
@@ -52,6 +53,7 @@ export class SvmUsdcAmountsAggregatorStream {
   constructor(
     protected options: {
       statePath: string;
+      logger?: PinoLogger;
     } = {
       statePath: './prices.json',
     },
@@ -63,14 +65,11 @@ export class SvmUsdcAmountsAggregatorStream {
 
       this.prices = JSON.parse(file);
     } catch (e) {
-      if (e instanceof Error) {
-        if ('code' in e && e.code === 'ENOENT') {
-          this.prices = {};
-          return;
-        }
+      if (this.options.logger) {
+        this.options.logger.warn(`Loading state error ${e}. Creating new state.`);
       }
 
-      throw e;
+      this.prices = {};
     }
   }
 
