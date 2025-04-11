@@ -468,6 +468,10 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS evm_swap_parts_with_prices_vols_mv
     volume_1hr          Float64,
     volume_6hr          Float64,
     volume_24hr         Float64,
+    swap_count_5min         Float64,
+    swap_count_1hr          Float64,
+    swap_count_6hr          Float64,
+    swap_count_24hr         Float64,
     sign                Int8
 ) ENGINE = MergeTree()
     PARTITION BY toYYYYMM(timestamp)
@@ -501,25 +505,50 @@ SELECT
         ORDER BY timestamp
         RANGE BETWEEN 86400 PRECEDING AND CURRENT ROW
     ) AS volume_24hr,
+	sum(sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 300 PRECEDING AND CURRENT ROW
+    ) AS swap_count_5min,
+        sum(sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 3600 PRECEDING AND CURRENT ROW
+    ) AS swap_count_1hr,
+        sum(sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 21600 PRECEDING AND CURRENT ROW
+    ) AS swap_count_6hr,
+        sum(sign) OVER (
+        PARTITION BY token_a, network
+        ORDER BY timestamp
+        RANGE BETWEEN 86400 PRECEDING AND CURRENT ROW
+    ) AS swap_count_24hr,
     sign
 FROM evm_swap_parts_with_prices2_mv
 WHERE price_token_usd > 0;
+
 
 -- Materialized view that generates 5-minute candlestick data for tokens + holders
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
 (
     timestamp DateTime CODEC (DoubleDelta, ZSTD),
-    token String,
-    network LowCardinality(String),    
-    open_price_token_usd Float64,
-    high_price_token_usd Float64,
-    low_price_token_usd	Float64,
-    close_price_token_usd Float64,
-    volume_5min_usd	Float64,
-    volume_1hr_usd	Float64,
-    volume_6hr_usd	Float64,
-    volume_24hr_usd	Float64,
-    holders	UInt32
+    token                   String,
+    network                 LowCardinality(String),    
+    open_price_token_usd    Float64,
+    high_price_token_usd    Float64,
+    low_price_token_usd	    Float64,
+    close_price_token_usd   Float64,
+    volume_5min_usd	        Float64,
+    volume_1hr_usd	        Float64,
+    volume_6hr_usd	        Float64,
+    volume_24hr_usd	        Float64,
+    swap_count_5min         Float64,
+    swap_count_1hr          Float64,
+    swap_count_6hr          Float64,
+    swap_count_24hr         Float64,
+    holders                 UInt32
 ) ENGINE = ReplacingMergeTree()
     PARTITION BY toYYYYMM(timestamp)
     ORDER BY (timestamp, token, network)
@@ -538,6 +567,10 @@ AS
 		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
 		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
 		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+		, argMax(pp.swap_count_5min, pp.timestamp) AS swap_count_5min
+		, argMax(pp.swap_count_1hr, pp.timestamp) AS swap_count_1hr
+		, argMax(pp.swap_count_6hr, pp.timestamp) AS swap_count_6hr
+		, argMax(pp.swap_count_24hr, pp.timestamp) AS swap_count_24hr
 		, argMax(hh.holders, hh.timestamp) AS holders
     FROM evm_swap_parts_with_prices_vols_mv pp
 		/*
@@ -580,6 +613,10 @@ AS
 		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
 		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
 		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+		, argMax(pp.swap_count_5min, pp.timestamp) AS swap_count_5min
+		, argMax(pp.swap_count_1hr, pp.timestamp) AS swap_count_1hr
+		, argMax(pp.swap_count_6hr, pp.timestamp) AS swap_count_6hr
+		, argMax(pp.swap_count_24hr, pp.timestamp) AS swap_count_24hr
 		, argMax(hh.holders, hh.timestamp) AS holders
 	FROM evm_swap_parts_with_prices_vols_mv pp
 		/*
