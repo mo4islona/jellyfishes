@@ -20,7 +20,7 @@ async function main() {
   const logger = createLogger('solana_swaps');
 
   const ds = new SolanaSwapsStream({
-    portal: 'https://portal.sqd.dev/datasets/solana-beta',
+    portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     blockRange: {
       from: process.env.FROM_BLOCK || 317617480,
       to: process.env.TO_BLOCK,
