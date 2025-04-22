@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
-import { toUnixTime } from '../../solana_dexes/clickhouse';
+import { toUnixTime } from '../../pipes/clickhouse';
 
 const SOL_USD = '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d';
 const USDT_USD = '0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b';
@@ -16,7 +16,7 @@ export type PriceSnapshot = Record<string, number>;
 
 @Injectable()
 export class PriceService {
-  async getPriceSnapshot(ts?: string | number): Promise<PriceSnapshot> {
+  async getPriceSnapshot(ts: string | number): Promise<PriceSnapshot> {
     const time = toUnixTime(ts);
     for (let i = 0; i < 10; i++) {
       const res = await axios.get<{

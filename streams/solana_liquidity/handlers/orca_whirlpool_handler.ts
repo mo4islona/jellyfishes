@@ -1,41 +1,38 @@
-import { BaseHandler } from './base_handler';
-import * as whirlpool from '../../solana_swaps/abi/orca_whirlpool';
-import * as tokenProgram from '../../solana_swaps/abi/tokenProgram';
+import { BaseHandler } from "./base_handler";
+import * as whirlpool from "../../solana_swaps/abi/orca_whirlpool";
+import * as tokenProgram from "../../solana_swaps/abi/tokenProgram";
 import {
   Block,
   getInnerTransfersByLevel,
-  getInstructionD1,
   getTransactionHash,
   Instruction,
-} from '../../solana_swaps/utils';
+} from "../../solana_swaps/utils";
 import {
   AddLiquidity,
   RemoveLiquidity,
   InitializeLiquidity,
   SwapLiquidityEvent,
-} from './base_handler';
-import { Offset } from 'core/abstract_stream';
+} from "./base_handler";
 
 export class OrcaWhirlpoolHandler extends BaseHandler {
   constructor() {
-    super('orca', 'clmm');
+    super("orca", "clmm");
   }
 
   handleInstruction(
     instruction: Instruction,
-    block: Block,
-    offset: Offset,
+    block: Block
   ): AddLiquidity | RemoveLiquidity | InitializeLiquidity | SwapLiquidityEvent {
     switch (instruction.d8) {
       case whirlpool.instructions.increaseLiquidity.d8:
-        return this.handleAddLiquidity(instruction, block, offset);
+        return this.handleAddLiquidity(instruction, block);
       case whirlpool.instructions.decreaseLiquidity.d8:
-        return this.handleRemoveLiquidity(instruction, block, offset);
+        return this.handleRemoveLiquidity(instruction, block);
       case whirlpool.instructions.initializePool.d8:
       case whirlpool.instructions.initializePoolV2.d8:
-        return this.handleInitializePool(instruction, block, offset);
+        return this.handleInitializePool(instruction, block);
       case whirlpool.instructions.swap.d8:
-        return this.handleSwap(instruction, block, offset);
+        return this.handleSwap(instruction, block);
       default:
         throw new Error(`Unknown instruction: ${instruction.d8}`);
     }
@@ -66,7 +63,7 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
     }
   }
 
-  handleAddLiquidity(instruction: Instruction, block: Block, offset: Offset): AddLiquidity {
+  handleAddLiquidity(instruction: Instruction, block: Block): AddLiquidity {
     const increaseLiquidityInstruction =
       whirlpool.instructions.increaseLiquidity.decode(instruction);
     const {
@@ -74,22 +71,30 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
     } = increaseLiquidityInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.destination === tokenVaultA);
-    const tokenBTransfer = transfers.find((t) => t.accounts.destination === tokenVaultB);
+    const tokenATransfer = transfers.find(
+      (t) => t.accounts.destination === tokenVaultA
+    );
+    const tokenBTransfer = transfers.find(
+      (t) => t.accounts.destination === tokenVaultB
+    );
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
+    const tokenABalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultA
+    );
+    const tokenBBalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultB
+    );
 
     return {
       pool,
       protocol: this.protocol,
       poolType: this.poolType,
-      eventType: 'add',
+      eventType: "add",
       tokenAAmount: tokenATransfer?.data.amount ?? 0n,
       tokenBAmount: tokenBTransfer?.data.amount ?? 0n,
-      tokenAMint: tokenABalance?.preMint ?? '',
-      tokenBMint: tokenBBalance?.preMint ?? '',
+      tokenAMint: tokenABalance?.preMint ?? "",
+      tokenBMint: tokenBBalance?.preMint ?? "",
       tokenABalance: tokenABalance?.postAmount ?? 0n,
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
@@ -102,11 +107,13 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: this.getSender(instruction, block),
       timestamp: new Date(block.header.timestamp * 1000),
-      offset,
     };
   }
 
-  handleRemoveLiquidity(instruction: Instruction, block: Block, offset: Offset): RemoveLiquidity {
+  handleRemoveLiquidity(
+    instruction: Instruction,
+    block: Block
+  ): RemoveLiquidity {
     const decreaseLiquidityInstruction =
       whirlpool.instructions.decreaseLiquidity.decode(instruction);
     const {
@@ -114,22 +121,30 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
     } = decreaseLiquidityInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.source === tokenVaultA);
-    const tokenBTransfer = transfers.find((t) => t.accounts.source === tokenVaultB);
+    const tokenATransfer = transfers.find(
+      (t) => t.accounts.source === tokenVaultA
+    );
+    const tokenBTransfer = transfers.find(
+      (t) => t.accounts.source === tokenVaultB
+    );
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
+    const tokenABalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultA
+    );
+    const tokenBBalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultB
+    );
 
     return {
       pool,
       protocol: this.protocol,
       poolType: this.poolType,
-      eventType: 'remove',
+      eventType: "remove",
       tokenAAmount: (tokenATransfer?.data.amount ?? 0n) * -1n,
       tokenBAmount: (tokenBTransfer?.data.amount ?? 0n) * -1n,
-      tokenAMint: tokenABalance?.preMint ?? '',
-      tokenBMint: tokenBBalance?.preMint ?? '',
+      tokenAMint: tokenABalance?.preMint ?? "",
+      tokenBMint: tokenBBalance?.preMint ?? "",
       tokenABalance: tokenABalance?.postAmount ?? 0n,
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
@@ -142,36 +157,48 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: this.getSender(instruction, block),
       timestamp: new Date(block.header.timestamp * 1000),
-      offset,
     };
   }
 
   handleInitializePool(
     instruction: Instruction,
-    block: Block,
-    offset: Offset,
+    block: Block
   ): InitializeLiquidity {
     const initializePoolInstruction =
       instruction.d8 === whirlpool.instructions.initializePool.d8
         ? whirlpool.instructions.initializePool.decode(instruction)
         : whirlpool.instructions.initializePoolV2.decode(instruction);
     const {
-      accounts: { whirlpool: pool, tokenVaultA, tokenVaultB, tokenMintA, tokenMintB },
+      accounts: {
+        whirlpool: pool,
+        tokenVaultA,
+        tokenVaultB,
+        tokenMintA,
+        tokenMintB,
+      },
     } = initializePoolInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.destination === tokenVaultA);
-    const tokenBTransfer = transfers.find((t) => t.accounts.destination === tokenVaultB);
+    const tokenATransfer = transfers.find(
+      (t) => t.accounts.destination === tokenVaultA
+    );
+    const tokenBTransfer = transfers.find(
+      (t) => t.accounts.destination === tokenVaultB
+    );
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
+    const tokenABalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultA
+    );
+    const tokenBBalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultB
+    );
 
     return {
       pool,
       protocol: this.protocol,
       poolType: this.poolType,
-      eventType: 'initialize',
+      eventType: "initialize",
       tokenAMint: tokenMintA,
       tokenBMint: tokenMintB,
       tokenAAmount: tokenATransfer?.data.amount ?? 0n,
@@ -187,39 +214,53 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
       timestamp: new Date(block.header.timestamp * 1000),
-      offset,
     };
   }
 
-  private handleSwap(instruction: Instruction, block: Block, offset: Offset): SwapLiquidityEvent {
+  private handleSwap(
+    instruction: Instruction,
+    block: Block
+  ): SwapLiquidityEvent {
     const swapInstruction = whirlpool.instructions.swap.decode(instruction);
     const {
       accounts: { whirlpool: pool, tokenVaultA, tokenVaultB },
     } = swapInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransferIn = transfers.find((t) => t.accounts.destination === tokenVaultA);
-    const tokenBTransferIn = transfers.find((t) => t.accounts.destination === tokenVaultB);
-    const tokenATransferOut = transfers.find((t) => t.accounts.source === tokenVaultA);
-    const tokenBTransferOut = transfers.find((t) => t.accounts.source === tokenVaultB);
+    const tokenATransferIn = transfers.find(
+      (t) => t.accounts.destination === tokenVaultA
+    );
+    const tokenBTransferIn = transfers.find(
+      (t) => t.accounts.destination === tokenVaultB
+    );
+    const tokenATransferOut = transfers.find(
+      (t) => t.accounts.source === tokenVaultA
+    );
+    const tokenBTransferOut = transfers.find(
+      (t) => t.accounts.source === tokenVaultB
+    );
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
+    const tokenABalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultA
+    );
+    const tokenBBalance = tx.tokenBalances.find(
+      (tb) => tb.account === tokenVaultB
+    );
 
     return {
       pool,
       protocol: this.protocol,
       poolType: this.poolType,
-      eventType: 'swap',
+      eventType: "swap",
       tokenAAmount: tokenATransferIn
         ? tokenATransferIn.data.amount
         : (tokenATransferOut?.data.amount ?? 0n) * -1n,
       tokenBAmount: tokenBTransferIn
         ? tokenBTransferIn.data.amount
         : (tokenBTransferOut?.data.amount ?? 0n) * -1n,
-      tokenAMint: tokenABalance?.preMint ?? '',
-      tokenBMint: tokenBBalance?.preMint ?? '',
+      tokenAMint: tokenABalance?.preMint ?? "",
+      tokenBMint: tokenBBalance?.preMint ?? "",
       tokenABalance: tokenABalance?.postAmount ?? 0n,
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
@@ -231,12 +272,15 @@ export class OrcaWhirlpoolHandler extends BaseHandler {
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
       timestamp: new Date(block.header.timestamp * 1000),
-      offset,
     };
   }
 
   private getSender(instruction: Instruction, block: Block): string {
-    const [transfer] = getInnerTransfersByLevel(instruction, block.instructions, 1);
+    const [transfer] = getInnerTransfersByLevel(
+      instruction,
+      block.instructions,
+      1
+    );
     const decodedTransfer = tokenProgram.instructions.transfer.decode(transfer);
     return decodedTransfer.accounts.authority;
   }

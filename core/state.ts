@@ -1,18 +1,34 @@
-import { PortalClient } from '@subsquid/portal-client';
-import { Offset } from './abstract_stream';
+import { Logger, Offset } from './portal_abstract_stream';
 
 export interface State<Args extends any[] = any[]> {
+  logger: Logger;
+
+  setLogger(logger: Logger): void;
+
   saveOffset(offset: Offset, ...args: Args): Promise<unknown>;
 
   getOffset(v: Offset): Promise<{ current: Offset; initial: Offset } | undefined>;
 
-  setPortal(portal: PortalClient): void;
+  onStateRollback?(offset: Offset): Promise<void>;
 }
 
 export abstract class AbstractState {
-  portal: PortalClient;
+  logger: Logger;
 
-  setPortal(portal: PortalClient) {
-    this.portal = portal;
+  setLogger(logger: Logger) {
+    this.logger = logger;
+  }
+
+  encodeOffset(offset: Offset): string {
+    return JSON.stringify(offset);
+  }
+
+  decodeOffset(offset: string): Offset {
+    return {
+      timestamp: 0,
+      number: 0,
+      parentBlockHash: '',
+      ...(JSON.parse(offset) || {}),
+    };
   }
 }

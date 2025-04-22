@@ -1,6 +1,6 @@
 import { getInstructionData, getInstructionDescriptor } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef } from '../../core/abstract_stream';
+import { BlockRef, OptionalArgs, PortalAbstractStream } from '../../core/portal_abstract_stream';
 import * as meteora_damm from './abi/meteora_damm/index';
 import * as meteora_dlmm from './abi/meteora_dlmm/index';
 import * as whirlpool from './abi/orca_whirlpool/index';
@@ -26,41 +26,40 @@ export type SolanaSwap = {
   input: {
     amount: bigint;
     mint: string;
-    //vault: string };
+    decimals: number;
   };
   output: {
     amount: bigint;
     mint: string;
-    // vault: string
+    decimals: number;
   };
   instruction: { address: number[] };
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
-export type SolanaSwapTransfer = Pick<SolanaSwap, 'input' | 'output' | 'account' | 'type'>;
+export type SolanaSwapTransfer = {
+  type: SwapType;
+  account: string;
+  in: { amount: bigint; token: { postMint: string; postDecimals: number } };
+  out: { amount: bigint; token: { postMint: string; postDecimals: number } };
+};
 
 export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
 }
 
-export class SolanaSwapsStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
+export class SolanaSwapsStream extends PortalAbstractStream<
+  SolanaSwap,
+  OptionalArgs<{
     tokens?: string[];
     type?: SwapType[];
-  },
-  SolanaSwap,
-  { number: number; hash: string }
+  }>
 > {
   async stream(): Promise<ReadableStream<SolanaSwap[]>> {
-    const {args} = this.options;
+    const { args } = this.options;
 
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const types = args.type || [
+    const types = args?.type || [
       'orca_whirlpool',
       'meteora_damm',
       'meteora_dlmm',
@@ -68,10 +67,8 @@ export class SolanaSwapsStream extends AbstractStream<
       'raydium_amm',
     ];
 
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,
@@ -94,6 +91,7 @@ export class SolanaSwapsStream extends AbstractStream<
           account: true,
           preMint: true,
           postMint: true,
+          postDecimals: true,
         },
       },
       instructions: types.map((type) => {
@@ -151,19 +149,14 @@ export class SolanaSwapsStream extends AbstractStream<
       }),
     });
 
-    return source.pipeThrough(
+    const stream = source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
 
             const swaps: SolanaSwap[] = [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             for (const ins of block.instructions) {
               let swap: SolanaSwapTransfer | null = null;
@@ -211,9 +204,9 @@ export class SolanaSwapsStream extends AbstractStream<
 
               if (!swap) continue;
               else if (
-                args.tokens &&
-                !args.tokens.includes(swap.input.mint) &&
-                !args.tokens.includes(swap.output.mint)
+                args?.tokens &&
+                !args?.tokens.includes(swap.in.token.postMint) &&
+                !args?.tokens.includes(swap.out.token.postMint)
               ) {
                 continue;
               }
@@ -223,30 +216,41 @@ export class SolanaSwapsStream extends AbstractStream<
               swaps.push({
                 id: `${txHash}/${ins.transactionIndex}`,
                 type: swap.type,
-                block: {number: block.header.number, hash: block.header.hash},
+                block: {
+                  number: block.header.number,
+                  hash: block.header.hash,
+                  timestamp: block.header.timestamp,
+                },
                 instruction: {
                   address: ins.instructionAddress,
                 },
-                input: swap.input,
-                output: swap.output,
+                input: {
+                  amount: swap.in.amount,
+                  mint: swap.in.token.postMint,
+                  decimals: swap.in.token.postDecimals,
+                },
+                output: {
+                  amount: swap.out.amount,
+                  mint: swap.out.token.postMint,
+                  decimals: swap.out.token.postDecimals,
+                },
                 account: swap.account,
                 transaction: {
                   hash: txHash,
                   index: ins.transactionIndex,
                 },
                 timestamp: new Date(block.header.timestamp * 1000),
-                offset,
               });
             }
 
             return swaps;
           });
 
-          if (!res.length) return;
-
           controller.enqueue(res);
         },
       }),
     );
+
+    return stream;
   }
 }

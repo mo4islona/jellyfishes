@@ -1,6 +1,6 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
+import { BlockRef, PortalAbstractStream, TransactionRef } from '../../core/portal_abstract_stream';
 import { getTransactionHash } from '../solana_swaps/utils';
 import * as tokenProgram from './abi/tokenProgram/index';
 
@@ -12,27 +12,13 @@ export type SolanaMint = {
   freezeAuthority?: string;
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
-export class SolanaMintStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
-  },
-  SolanaMint,
-  { number: number; hash: string }
-> {
+export class SolanaMintStream extends PortalAbstractStream<SolanaMint> {
   async stream(): Promise<ReadableStream<SolanaMint[]>> {
-    const {args} = this.options;
-
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,
@@ -74,15 +60,10 @@ export class SolanaMintStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             const mints: SolanaMint[] = [];
 
@@ -116,16 +97,17 @@ export class SolanaMintStream extends AbstractStream<
                   hash: txHash,
                   index: ins.transactionIndex,
                 },
-                block: {number: block.header.number, hash: block.header.hash},
+                block: {
+                  number: block.header.number,
+                  hash: block.header.hash,
+                  timestamp: block.header.timestamp,
+                },
                 timestamp: new Date(block.header.timestamp * 1000),
-                offset,
               });
             }
 
             return mints;
           });
-
-          if (!res.length) return;
 
           controller.enqueue(res);
         },

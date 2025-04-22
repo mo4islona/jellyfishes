@@ -1,44 +1,35 @@
-export type Progress = {
-  state: {
-    initial: number;
-    last: number;
-    current: number;
-    percent: number;
-  };
-  interval: {
-    processedTotal: number;
-    processedPerSecond: number;
-  };
-};
+import { ProgressState } from './portal_abstract_stream';
 
-export type TrackProgressOptions<DecodedOffset> = {
+export type TrackProgressOptions<Offset> = {
   intervalSeconds?: number;
-  getLatestOffset: () => Promise<DecodedOffset>;
-  onProgress: (progress: Progress) => void;
-  initial?: DecodedOffset;
+  getLatestOffset: () => Promise<Offset>;
+  onProgress: (progress: ProgressState) => void;
+  initial?: Offset;
 };
 
-export class TrackProgress<DecodedOffset extends { number: number } = any> {
-  initial?: { offset: DecodedOffset; ts: number };
-  last: { offset: DecodedOffset; ts: number };
-  current: { offset: DecodedOffset; ts: number };
+export class TrackProgress<Offset extends { number: number } = any> {
+  initial?: { offset: Offset; ts: number };
+  last: { offset: Offset; ts: number };
+  current: { offset: Offset; ts: number };
   interval?: NodeJS.Timeout;
 
-  constructor(private options: TrackProgressOptions<DecodedOffset>) {
+  stopped = false;
+
+  constructor(private options: TrackProgressOptions<Offset>) {
     if (options.initial) {
-      this.initial = {offset: options.initial, ts: Date.now()};
+      this.initial = { offset: options.initial, ts: Date.now() };
     }
   }
 
-  track(offset: DecodedOffset) {
+  track(offset: Offset) {
     if (!this.initial) {
-      this.initial = {offset, ts: Date.now()};
+      this.initial = { offset, ts: Date.now() };
     }
-    this.current = {offset, ts: Date.now()};
+    this.current = { offset, ts: Date.now() };
 
-    if (this.interval) return;
+    if (this.interval || this.stopped) return;
 
-    const {intervalSeconds = 5, onProgress} = this.options;
+    const { intervalSeconds = 5, onProgress } = this.options;
 
     this.interval = setInterval(async () => {
       if (!this.current || !this.initial) return;
@@ -68,5 +59,10 @@ export class TrackProgress<DecodedOffset extends { number: number } = any> {
 
       this.last = this.current;
     }, intervalSeconds * 1000);
+  }
+
+  stop() {
+    this.stopped = true;
+    clearInterval(this.interval);
   }
 }

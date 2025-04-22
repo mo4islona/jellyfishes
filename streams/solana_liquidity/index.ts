@@ -1,7 +1,10 @@
-import { AbstractStream } from '../../core/abstract_stream';
-import * as raydium_amm from '../solana_swaps/abi/raydium_amm';
-import * as meteora_damm from '../solana_swaps/abi/meteora_damm';
-import * as whirlpool from '../solana_swaps/abi/orca_whirlpool';
+import {
+  PortalAbstractStream,
+  OptionalArgs,
+} from "../../core/portal_abstract_stream";
+import * as raydium_amm from "../solana_swaps/abi/raydium_amm";
+import * as meteora_damm from "../solana_swaps/abi/meteora_damm";
+import * as whirlpool from "../solana_swaps/abi/orca_whirlpool";
 import {
   RaydiumAmmHandler,
   MeteoraAmmHandler,
@@ -9,11 +12,14 @@ import {
   BaseHandler,
   LiquidityEvent,
   Protocol,
-  InitializeLiquidity,
-} from './handlers';
-import { PoolRepository } from './repository/pool_repository';
-import { addErrorContext, getInstructionD1, Instruction } from '../solana_swaps/utils';
-import { augmentBlock } from '@subsquid/solana-objects';
+} from "./handlers";
+import { PoolRepository } from "./repository/pool_repository";
+import {
+  addErrorContext,
+  getInstructionD1,
+  Instruction,
+} from "../solana_swaps/utils";
+import { augmentBlock } from "@subsquid/solana-objects";
 
 interface InstructionFilter {
   programId: string[];
@@ -52,9 +58,12 @@ const instructionFilters: InstructionFilter[] = [
       meteora_damm.instructions.initializePermissionedPool.d8,
       meteora_damm.instructions.initializePermissionlessPool.d8,
       meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
-      meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8,
-      meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8,
-      meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8,
+      meteora_damm.instructions
+        .initializePermissionlessConstantProductPoolWithConfig.d8,
+      meteora_damm.instructions
+        .initializePermissionlessConstantProductPoolWithConfig2.d8,
+      meteora_damm.instructions
+        .initializeCustomizablePermissionlessConstantProductPool.d8,
       meteora_damm.instructions.swap.d8,
     ],
     isCommitted: true,
@@ -107,51 +116,39 @@ const ALL_FIELDS = {
   },
 };
 
-export class SolanaLiquidityStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
-    type?: Protocol[];
-    dbPath?: string;
-  },
+type SolanaLiquidityStreamArgs = OptionalArgs<{
+  type: Protocol[];
+}>;
+
+export class SolanaLiquidityStream extends PortalAbstractStream<
   LiquidityEvent,
-  { number: number; hash: string }
+  SolanaLiquidityStreamArgs
 > {
   private handlerRegistry: Record<string, BaseHandler>;
-
   private poolRepository?: PoolRepository;
 
   initialize() {
-    const { args } = this.options;
-
-    // Initialize pool repository if dbPath is provided
-    if (args.dbPath) {
-      this.handlerRegistry = {
-        [raydium_amm.programId]: new RaydiumAmmHandler(),
-        [meteora_damm.programId]: new MeteoraAmmHandler(),
-        [whirlpool.programId]: new OrcaWhirlpoolHandler(),
-      };
-    }
+    this.handlerRegistry = {
+      [raydium_amm.programId]: new RaydiumAmmHandler(),
+      [meteora_damm.programId]: new MeteoraAmmHandler(),
+      [whirlpool.programId]: new OrcaWhirlpoolHandler(),
+    };
   }
 
   async stream(): Promise<ReadableStream<LiquidityEvent[]>> {
-    const { args } = this.options;
-    const offset = await this.getState({ number: args.fromBlock, hash: '' });
-
     const query = {
-      type: 'solana',
-      fromBlock: offset.number,
-      toBlock: args.toBlock,
+      type: "solana",
+      fromBlock: this.options.blockRange.from,
+      toBlock: this.options.blockRange.to,
       fields: ALL_FIELDS,
       instructions: instructionFilters,
     };
-    console.log('query', JSON.stringify(query));
-    const source = this.portal.getStream(query);
+    const source = await this.getStream(query);
 
     return source.pipeThrough(
       new TransformStream({
         transform: ({ blocks }, controller) => {
-          blocks.flatMap((_block: any) => {
+          const liquidityEvents = blocks.flatMap((_block: any) => {
             const block = augmentBlock<typeof ALL_FIELDS>({
               header: _block.header,
               instructions: _block.instructions || [],
@@ -162,33 +159,35 @@ export class SolanaLiquidityStream extends AbstractStream<
               transactions: _block.transactions || [],
             });
 
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
             const liquidityEvents: LiquidityEvent[] = [];
 
             const { instructions } = block;
-            if (!instructions) return;
+            if (!instructions) return liquidityEvents;
 
             for (const instruction of block.instructions) {
               try {
                 const handler = this.handlerRegistry[instruction.programId];
                 if (!handler) continue;
 
-                liquidityEvents.push(handler.handleInstruction(instruction, block, offset));
+                liquidityEvents.push(
+                  handler.handleInstruction(instruction, block)
+                );
               } catch (error: any) {
                 throw addErrorContext(error, {
-                  tx: instruction.transaction?.signatures.join(', '),
-                  instruction: instruction.instructionAddress.map((i) => i + 1).join('.'),
+                  tx: instruction.transaction?.signatures.join(", "),
+                  instruction: instruction.instructionAddress
+                    .map((i) => i + 1)
+                    .join("."),
                 });
               }
             }
 
-            if (liquidityEvents.length) controller.enqueue(liquidityEvents);
+            return liquidityEvents;
           });
+
+          controller.enqueue(liquidityEvents);
         },
-      }),
+      })
     );
   }
 
@@ -205,13 +204,18 @@ export class SolanaLiquidityStream extends AbstractStream<
     // Check Meteora initialize instructions
     if (instruction.programId === meteora_damm.programId) {
       switch (instruction.d8) {
-        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8:
+        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier
+          .d8:
         case meteora_damm.instructions.initializePermissionedPool.d8:
         case meteora_damm.instructions.initializePermissionlessPool.d8:
-        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8:
-        case meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8:
-        case meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8:
-        case meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8:
+        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier
+          .d8:
+        case meteora_damm.instructions
+          .initializePermissionlessConstantProductPoolWithConfig.d8:
+        case meteora_damm.instructions
+          .initializePermissionlessConstantProductPoolWithConfig2.d8:
+        case meteora_damm.instructions
+          .initializeCustomizablePermissionlessConstantProductPool.d8:
           return true;
         default:
           return false;

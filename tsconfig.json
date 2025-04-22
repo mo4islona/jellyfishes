@@ -6,10 +6,7 @@
     "sourceMap": true,
     "outDir": "dist",
     "importHelpers": true,
-    "types": [
-      "vitest/globals",
-      "node",
-    ],
+    "types": ["vitest/globals", "node"],
     "strict": true,
     "allowJs": true,
     "noImplicitAny": false,
@@ -29,26 +26,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "paths": {
-      "@libs/*": [
-        "libs/*"
-      ],
-      "@api/*": [
-        "api/*"
-      ],
-      "@apps/common/*": [
-        "apps/common/*"
-      ],
-      "@apps": [
-        "apps/index"
-      ]
+      "@core/*": ["./core/"]
     }
   },
-  "exclude": [
-    "helm-charts",
-    "node_modules",
-    "ci",
-    "local",
-    "dumps",
-    "deployment"
-  ]
+  "exclude": ["helm-charts", "app", "node_modules", "ci", "local", "dumps", "deployment"]
 }

@@ -1,8 +1,13 @@
 .idea
 .yarn
 node_modules
+
 *.sqlite*
 *.db
 .env
 
 dist
+*.db-shm
+*.db-wal
+ch_data
+.DS_Store

@@ -1,6 +1,6 @@
 import { getInstructionData } from '@subsquid/solana-stream';
 import { toHex } from '@subsquid/util-internal-hex';
-import { AbstractStream, BlockRef, TransactionRef } from '../../core/abstract_stream';
+import { BlockRef, PortalAbstractStream, TransactionRef } from '../../core/portal_abstract_stream';
 import { Instruction, getTransactionHash } from '../solana_swaps/utils';
 import * as metaplex from './abi/metaplex/index';
 
@@ -13,7 +13,6 @@ export type SolanaTokenMetadata = {
   isMutable: boolean;
   transaction: TransactionRef;
   block: BlockRef;
-  offset: string;
   timestamp: Date;
 };
 
@@ -21,23 +20,10 @@ export function getInstructionD1(instruction: Instruction) {
   return toHex(getInstructionData(instruction)).slice(0, 4);
 }
 
-export class SolanaTokenMetadataStream extends AbstractStream<
-  {
-    fromBlock: number;
-    toBlock?: number;
-  },
-  SolanaTokenMetadata,
-  { number: number; hash: string }
-> {
+export class SolanaTokenMetadataStream extends PortalAbstractStream<SolanaTokenMetadata> {
   async stream(): Promise<ReadableStream<SolanaTokenMetadata[]>> {
-    const {args} = this.options;
-
-    const offset = await this.getState({number: args.fromBlock, hash: ''});
-
-    const source = this.portal.getStream({
+    const source = await this.getStream({
       type: 'solana',
-      fromBlock: offset.number,
-      toBlock: args.toBlock,
       fields: {
         block: {
           number: true,
@@ -82,15 +68,10 @@ export class SolanaTokenMetadataStream extends AbstractStream<
 
     return source.pipeThrough(
       new TransformStream({
-        transform: ({blocks}, controller) => {
+        transform: ({ blocks }, controller) => {
           // FIXME
           const res = blocks.flatMap((block: any) => {
             if (!block.instructions) return [];
-
-            const offset = this.encodeOffset({
-              number: block.header.number,
-              hash: block.header.hash,
-            });
 
             const metadata: SolanaTokenMetadata[] = [];
 
@@ -115,9 +96,12 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV2.d1: {
@@ -133,9 +117,12 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
                 case metaplex.instructions.createMetadataAccountV3.d1: {
@@ -151,9 +138,12 @@ export class SolanaTokenMetadataStream extends AbstractStream<
                       hash: getTransactionHash(ins, block),
                       index: ins.transactionIndex,
                     },
-                    block: {number: block.header.number, hash: block.header.hash},
+                    block: {
+                      number: block.header.number,
+                      hash: block.header.hash,
+                      timestamp: block.header.timestamp,
+                    },
                     timestamp: new Date(block.header.timestamp * 1000),
-                    offset,
                   };
                 }
               }
@@ -161,8 +151,6 @@ export class SolanaTokenMetadataStream extends AbstractStream<
 
             return metadata;
           });
-
-          if (!res.length) return;
 
           controller.enqueue(res);
         },

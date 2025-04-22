@@ -8,7 +8,8 @@ services:
     ports:
       - '8123:8123'
     environment:
-      - ALLOW_EMPTY_PASSWORD=yes
+      - CLICKHOUSE_PASSWORD=password
+      - CLICKHOUSE_USER=default
     volumes:
       - clickhouse-db:/bitnami/clickhouse
       - ./local/clickhouse/config.xml:/opt/bitnami/clickhouse/etc/conf.d/config.xml
