@@ -1,17 +1,19 @@
 import { AbstractStream } from '../../core/abstract_stream';
 import * as raydium_amm from '../solana_swaps/abi/raydium_amm';
 import * as meteora_damm from '../solana_swaps/abi/meteora_damm';
+import * as whirlpool from '../solana_swaps/abi/orca_whirlpool';
 import {
   RaydiumAmmHandler,
   MeteoraAmmHandler,
+  OrcaWhirlpoolHandler,
   BaseHandler,
   LiquidityEvent,
   Protocol,
   InitializeLiquidity,
 } from './handlers';
 import { PoolRepository } from './repository/pool_repository';
-import { getInstructionD1, Instruction } from '../solana_swaps/utils';
-import { getInstructionDescriptor } from '@subsquid/solana-stream';
+import { addErrorContext, getInstructionD1, Instruction } from '../solana_swaps/utils';
+import { augmentBlock } from '@subsquid/solana-objects';
 
 interface InstructionFilter {
   programId: string[];
@@ -30,6 +32,8 @@ const instructionFilters: InstructionFilter[] = [
       raydium_amm.instructions.deposit.d1,
       raydium_amm.instructions.withdraw.d1,
       raydium_amm.instructions.initialize2.d1,
+      raydium_amm.instructions.swapBaseIn.d1,
+      raydium_amm.instructions.swapBaseOut.d1,
     ],
     isCommitted: true,
     innerInstructions: true,
@@ -51,6 +55,21 @@ const instructionFilters: InstructionFilter[] = [
       meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8,
       meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8,
       meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8,
+      meteora_damm.instructions.swap.d8,
+    ],
+    isCommitted: true,
+    innerInstructions: true,
+    transaction: true,
+    transactionTokenBalances: true,
+  },
+  {
+    programId: [whirlpool.programId],
+    d8: [
+      whirlpool.instructions.swap.d8,
+      whirlpool.instructions.increaseLiquidity.d8,
+      whirlpool.instructions.decreaseLiquidity.d8,
+      whirlpool.instructions.initializePool.d8,
+      whirlpool.instructions.initializePoolV2.d8,
     ],
     isCommitted: true,
     innerInstructions: true,
@@ -81,6 +100,10 @@ const ALL_FIELDS = {
     account: true,
     preMint: true,
     postMint: true,
+    preAmount: true,
+    postAmount: true,
+    preDecimals: true,
+    postDecimals: true,
   },
 };
 
@@ -103,11 +126,10 @@ export class SolanaLiquidityStream extends AbstractStream<
 
     // Initialize pool repository if dbPath is provided
     if (args.dbPath) {
-      this.poolRepository = new PoolRepository(args.dbPath, this.logger);
-
       this.handlerRegistry = {
-        [raydium_amm.programId]: new RaydiumAmmHandler(this.poolRepository),
-        [meteora_damm.programId]: new MeteoraAmmHandler(this.poolRepository),
+        [raydium_amm.programId]: new RaydiumAmmHandler(),
+        [meteora_damm.programId]: new MeteoraAmmHandler(),
+        [whirlpool.programId]: new OrcaWhirlpoolHandler(),
       };
     }
   }
@@ -115,22 +137,31 @@ export class SolanaLiquidityStream extends AbstractStream<
   async stream(): Promise<ReadableStream<LiquidityEvent[]>> {
     const { args } = this.options;
     const offset = await this.getState({ number: args.fromBlock, hash: '' });
-    const source = this.portal.getFinalizedStream({
+
+    const query = {
       type: 'solana',
       fromBlock: offset.number,
       toBlock: args.toBlock,
       fields: ALL_FIELDS,
       instructions: instructionFilters,
-    });
+    };
+    console.log('query', JSON.stringify(query));
+    const source = this.portal.getStream(query);
 
     return source.pipeThrough(
       new TransformStream({
         transform: ({ blocks }, controller) => {
-          if (this.poolRepository) {
-            this.savePoolMetadata(blocks);
-          }
+          blocks.flatMap((_block: any) => {
+            const block = augmentBlock<typeof ALL_FIELDS>({
+              header: _block.header,
+              instructions: _block.instructions || [],
+              logs: _block.logs || [],
+              balances: _block.balances || [],
+              tokenBalances: _block.tokenBalances || [],
+              rewards: _block.rewards || [],
+              transactions: _block.transactions || [],
+            });
 
-          blocks.flatMap((block: any) => {
             const offset = this.encodeOffset({
               number: block.header.number,
               hash: block.header.hash,
@@ -141,10 +172,17 @@ export class SolanaLiquidityStream extends AbstractStream<
             if (!instructions) return;
 
             for (const instruction of block.instructions) {
-              const handler = this.handlerRegistry[instruction.programId];
-              if (!handler) continue;
+              try {
+                const handler = this.handlerRegistry[instruction.programId];
+                if (!handler) continue;
 
-              liquidityEvents.push(handler.handleInstruction(instruction, block, offset));
+                liquidityEvents.push(handler.handleInstruction(instruction, block, offset));
+              } catch (error: any) {
+                throw addErrorContext(error, {
+                  tx: instruction.transaction?.signatures.join(', '),
+                  instruction: instruction.instructionAddress.map((i) => i + 1).join('.'),
+                });
+              }
             }
 
             if (liquidityEvents.length) controller.enqueue(liquidityEvents);
@@ -166,73 +204,21 @@ export class SolanaLiquidityStream extends AbstractStream<
 
     // Check Meteora initialize instructions
     if (instruction.programId === meteora_damm.programId) {
-      const d8 = getInstructionDescriptor(instruction);
-      return [
-        meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
-        meteora_damm.instructions.initializePermissionedPool.d8,
-        meteora_damm.instructions.initializePermissionlessPool.d8,
-        meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8,
-        meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8,
-        meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8,
-        meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8,
-      ].includes(d8);
+      switch (instruction.d8) {
+        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8:
+        case meteora_damm.instructions.initializePermissionedPool.d8:
+        case meteora_damm.instructions.initializePermissionlessPool.d8:
+        case meteora_damm.instructions.initializePermissionlessPoolWithFeeTier.d8:
+        case meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8:
+        case meteora_damm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8:
+        case meteora_damm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8:
+          return true;
+        default:
+          return false;
+      }
     }
 
     return false;
-  }
-
-  /**
-   * Save pool metadata to SQLite database
-   */
-  private savePoolMetadata(blocks: any[]) {
-    if (!this.poolRepository) return;
-
-    try {
-      // Begin transaction for better performance
-      this.poolRepository.beginTransaction();
-
-      // Process each block
-      for (const block of blocks) {
-        const { instructions } = block;
-        if (!instructions) continue;
-
-        // Find initialize events
-        for (const instruction of instructions) {
-          const handler = this.handlerRegistry[instruction.programId];
-          if (!handler) continue;
-
-          // Only process initialize events
-          if (this.isInitializePoolInstruction(instruction)) {
-            const event = handler.handleInitializePool(instruction, block, '');
-
-            // Only process initialize events and ensure it's an InitializeLiquidity event
-            if (event.eventType === 'initialize' && 'tokenAMint' in event) {
-              const initEvent = event as InitializeLiquidity;
-              const protocolValue = initEvent.protocol === 'raydium' ? 1 : 2;
-              const poolTypeValue = initEvent.poolType === 'amm' ? 1 : 2;
-
-              this.poolRepository.savePool({
-                lp_mint: initEvent.lpMint,
-                token_a: initEvent.tokenA,
-                token_b: initEvent.tokenB,
-                protocol: protocolValue,
-                pool_type: poolTypeValue,
-                block_number: block.header.number,
-              });
-            }
-          }
-        }
-      }
-
-      // Commit transaction
-      this.poolRepository.commitTransaction();
-    } catch (error) {
-      // Rollback on error
-      if (this.poolRepository) {
-        this.poolRepository.rollbackTransaction();
-      }
-      this.logger.error(`Error saving pool metadata: ${error}`);
-    }
   }
 
   /**

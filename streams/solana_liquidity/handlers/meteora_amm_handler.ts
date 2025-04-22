@@ -6,33 +6,29 @@ import {
   Instruction,
 } from '../../solana_swaps/utils';
 import { Offset } from 'core/abstract_stream';
-import { BaseHandler } from './base_handler';
+import { BaseHandler, SwapLiquidityEvent } from './base_handler';
 import { AddLiquidity, RemoveLiquidity, InitializeLiquidity } from './base_handler';
 import * as meteoraDamm from '../../solana_swaps/abi/meteora_damm';
 import * as tokenProgram from '../../solana_swaps/abi/tokenProgram';
 import * as systemProgram from '../../solana_swaps/abi/system';
 
-import { getInstructionDescriptor } from '@subsquid/solana-stream';
 import { PoolRepository } from '../repository/pool_repository';
 
 export class MeteoraAmmHandler extends BaseHandler {
-  constructor(poolRepository: PoolRepository) {
-    super('meteora', 'amm', poolRepository);
+  constructor() {
+    super('meteora', 'amm');
   }
 
   handleInstruction(instruction: Instruction, block: Block, offset: Offset) {
-    const descriptor = getInstructionDescriptor(instruction);
-    switch (descriptor) {
+    switch (instruction.d8) {
       case meteoraDamm.instructions.addBalanceLiquidity.d8:
       case meteoraDamm.instructions.addImbalanceLiquidity.d8:
       case meteoraDamm.instructions.bootstrapLiquidity.d8:
         return this.handleAddLiquidity(instruction, block, offset);
 
       case meteoraDamm.instructions.removeBalanceLiquidity.d8:
-        return this.handleRemoveLiquidity(instruction, block, offset);
-
       case meteoraDamm.instructions.removeLiquiditySingleSide.d8:
-        return this.handleRemoveLiquiditySingleSide(instruction, block, offset);
+        return this.handleRemoveLiquidity(instruction, block, offset);
 
       case meteoraDamm.instructions.initializePermissionlessPool.d8:
         return this.handleInitializePool(instruction, block, offset);
@@ -44,53 +40,55 @@ export class MeteoraAmmHandler extends BaseHandler {
       case meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8:
       case meteoraDamm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8:
         return this.handleInitializePool(instruction, block, offset);
-
+      case meteoraDamm.instructions.swap.d8:
+        return this.handleSwap(instruction, block, offset);
       default:
-        throw new Error(`Unknown Meteora instruction type: ${descriptor}`);
+        throw new Error(`Unknown Meteora instruction type: ${instruction.d8}`);
+    }
+  }
+
+  getAddBalanceLiquidity(instruction: Instruction) {
+    switch (instruction.d8) {
+      case meteoraDamm.instructions.addBalanceLiquidity.d8:
+        return meteoraDamm.instructions.addBalanceLiquidity.decode(instruction);
+      case meteoraDamm.instructions.addImbalanceLiquidity.d8:
+        return meteoraDamm.instructions.addImbalanceLiquidity.decode(instruction);
+        break;
+      case meteoraDamm.instructions.bootstrapLiquidity.d8:
+        return meteoraDamm.instructions.bootstrapLiquidity.decode(instruction);
+      default:
+        throw new Error(`Unknown add liquidity instruction: ${instruction.d8}`);
     }
   }
 
   handleAddLiquidity(instruction: Instruction, block: Block, offset: Offset): AddLiquidity {
-    const descriptor = getInstructionDescriptor(instruction);
+    const decodedInstruction = this.getAddBalanceLiquidity(instruction);
 
-    let decodedInstruction;
-    switch (descriptor) {
-      case meteoraDamm.instructions.addBalanceLiquidity.d8:
-        decodedInstruction = meteoraDamm.instructions.addBalanceLiquidity.decode(instruction);
-        break;
-      case meteoraDamm.instructions.addImbalanceLiquidity.d8:
-        decodedInstruction = meteoraDamm.instructions.addImbalanceLiquidity.decode(instruction);
-        break;
-      default:
-        decodedInstruction = meteoraDamm.instructions.bootstrapLiquidity.decode(instruction);
-        break;
-    }
+    const { aTokenVault, bTokenVault, user, pool } = decodedInstruction.accounts;
 
-    const { lpMint, aTokenVault, user } = decodedInstruction.accounts;
-    const tokens = this.poolRepository.getTokens(lpMint);
+    const transfers = this.getTransfers(instruction);
+    const tokenATransfer = transfers.find((t) => t.accounts.destination === aTokenVault);
+    const tokenBTransfer = transfers.find((t) => t.accounts.destination === bTokenVault);
 
-    const [tokenAAmount, tokenBAmount] = getInnerTransfersByLevel(
-      instruction,
-      block.instructions,
-      2,
-    )
-      .map((instruction) => {
-        const {
-          accounts: { destination },
-          data: { amount },
-        } = tokenProgram.instructions.transfer.decode(instruction);
-        return { amount, destination };
-      })
-      .sort((a, b) => (a.destination === aTokenVault ? -1 : b.destination === aTokenVault ? 1 : 0))
-      .map((transfer) => transfer.amount);
+    const tx = instruction.getTransaction();
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === aTokenVault);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === bTokenVault);
 
     return {
       protocol: this.protocol,
+      pool,
       poolType: this.poolType,
       eventType: 'add',
-      lpMint,
-      tokenAAmount,
-      tokenBAmount,
+      tokenAMint: tokenABalance?.preMint ?? '',
+      tokenBMint: tokenBBalance?.preMint ?? '',
+      tokenAAmount: tokenATransfer?.data.amount ?? 0n,
+      tokenBAmount: tokenBTransfer?.data.amount ?? 0n,
+      tokenADecimals: tokenABalance?.preDecimals ?? 0,
+      tokenBDecimals: tokenBBalance?.preDecimals ?? 0,
+      tokenABalance: tokenABalance?.postAmount ?? 0n,
+      tokenBBalance: tokenBBalance?.postAmount ?? 0n,
+      tokenAVault: aTokenVault,
+      tokenBVault: bTokenVault,
       blockNumber: block.header.number,
       timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),
@@ -98,106 +96,148 @@ export class MeteoraAmmHandler extends BaseHandler {
       instruction: instruction.instructionAddress,
       sender: user,
       offset,
-      tokenA: tokens?.tokenA || '',
-      tokenB: tokens?.tokenB || '',
     };
+  }
+
+  decodeTransfer(ins: Instruction) {
+    switch (ins.d1) {
+      case tokenProgram.instructions.transferChecked.d1:
+        return tokenProgram.instructions.transferChecked.decode(ins);
+      case tokenProgram.instructions.transfer.d1:
+        return tokenProgram.instructions.transfer.decode(ins);
+      default:
+        throw new Error(`Unknown token transfer instruction: ${ins.d1}`);
+    }
+  }
+
+  getTransfers(ins: Instruction) {
+    return ins.inner
+      .filter((i) => {
+        switch (i.d1) {
+          case tokenProgram.instructions.transferChecked.d1:
+          case tokenProgram.instructions.transfer.d1:
+            return true;
+          default:
+            return false;
+        }
+      })
+      .map((i) => this.decodeTransfer(i));
+  }
+
+  getRemoveBalanceLiquidity(instruction: Instruction) {
+    switch (instruction.d8) {
+      case meteoraDamm.instructions.removeBalanceLiquidity.d8:
+        return meteoraDamm.instructions.removeBalanceLiquidity.decode(instruction);
+      case meteoraDamm.instructions.removeLiquiditySingleSide.d8:
+        return meteoraDamm.instructions.removeLiquiditySingleSide.decode(instruction);
+      case meteoraDamm.instructions.removeLiquiditySingleSide.d8:
+        return meteoraDamm.instructions.removeLiquiditySingleSide.decode(instruction);
+      default:
+        throw new Error(`Unknown remove liquidity instruction: ${instruction.d8}`);
+    }
   }
 
   handleRemoveLiquidity(instruction: Instruction, block: Block, offset: Offset): RemoveLiquidity {
-    const {
-      accounts: { lpMint, aTokenVault, user },
-    } = meteoraDamm.instructions.removeBalanceLiquidity.decode(instruction);
-    const tokens = this.poolRepository.getTokens(lpMint);
+    const decodedInstruction = this.getRemoveBalanceLiquidity(instruction);
 
-    const [tokenAAmount, tokenBAmount] = getInnerTransfersByLevel(
-      instruction,
-      block.instructions,
-      2,
-    )
-      .map((instruction) => {
-        const {
-          accounts: { destination },
-          data: { amount },
-        } = tokenProgram.instructions.transfer.decode(instruction);
-        return { amount, destination };
-      })
-      .sort((a, b) => {
-        if (a.destination === aTokenVault) return -1;
-        if (b.destination === aTokenVault) return 1;
-        return 0;
-      })
-      .map((transfer) => transfer.amount);
+    const { aTokenVault, bTokenVault, user, pool } = decodedInstruction.accounts;
+
+    const transfers = this.getTransfers(instruction);
+    const tokenATransfer = transfers.find((t) => t.accounts.source === aTokenVault);
+    const tokenBTransfer = transfers.find((t) => t.accounts.source === bTokenVault);
+
+    const tx = instruction.getTransaction();
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === aTokenVault);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === bTokenVault);
 
     return {
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'remove',
-      lpMint,
-      tokenAAmount: -tokenAAmount,
-      tokenBAmount: -tokenBAmount,
+      tokenAMint: tokenABalance?.preMint ?? '',
+      tokenBMint: tokenBBalance?.preMint ?? '',
+      tokenAAmount: (tokenATransfer?.data.amount ?? 0n) * -1n,
+      tokenBAmount: (tokenBTransfer?.data.amount ?? 0n) * -1n,
+      tokenADecimals: tokenABalance?.preDecimals ?? 0,
+      tokenBDecimals: tokenBBalance?.preDecimals ?? 0,
+      tokenABalance: tokenABalance?.postAmount ?? 0n,
+      tokenBBalance: tokenBBalance?.postAmount ?? 0n,
+      tokenAVault: aTokenVault,
+      tokenBVault: bTokenVault,
       blockNumber: block.header.number,
       timestamp: new Date(block.header.timestamp * 1000),
-      transactionHash: getTransactionHash(instruction, block),
+      transactionHash: tx.signatures[0],
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
       sender: user,
       offset,
-      tokenA: tokens?.tokenA || '',
-      tokenB: tokens?.tokenB || '',
     };
   }
 
-  // TODO: Should understand if removing liquidity from single side has the same effect on the underlying liquidity as a swap
-  // or somehow the liquidity maintains the constant product
-  handleRemoveLiquiditySingleSide(
-    instruction: Instruction,
-    block: Block,
-    offset: Offset,
-  ): RemoveLiquidity {
-    const {
-      accounts: { lpMint, aTokenVault, user },
-    } = meteoraDamm.instructions.removeLiquiditySingleSide.decode(instruction);
-    const tokens = this.poolRepository.getTokens(lpMint);
-
-    // As this function removes liquidity and uses a single token to send the liquidity to the user,
-    // we only have one internal token transfer instruction
-    const [tokenTransfer] = getInnerTransfersByLevel(instruction, block.instructions, 2).map(
-      (instruction) => {
-        const {
-          accounts: { source },
-          data: { amount },
-        } = tokenProgram.instructions.transfer.decode(instruction);
-        return {
-          source,
-          amount,
-          isTokenA: source === aTokenVault,
-        };
-      },
-    );
-
-    let tokenAAmount: bigint | undefined;
-    let tokenBAmount: bigint | undefined;
-    if (tokenTransfer) {
-      tokenAAmount = tokenTransfer.isTokenA ? tokenTransfer.amount : 0n;
-      tokenBAmount = tokenTransfer.isTokenA ? 0n : tokenTransfer.amount;
+  getInitialize(instruction: Instruction) {
+    switch (instruction.d8) {
+      case meteoraDamm.instructions.initializePermissionedPool.d8:
+        return meteoraDamm.instructions.initializePermissionedPool.decode(instruction);
+      case meteoraDamm.instructions.initializePermissionlessPoolWithFeeTier.d8:
+        return meteoraDamm.instructions.initializePermissionlessPoolWithFeeTier.decode(instruction);
+      case meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8:
+        return meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.decode(
+          instruction,
+        );
+      case meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8:
+        return meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.decode(
+          instruction,
+        );
+      case meteoraDamm.instructions.initializeCustomizablePermissionlessConstantProductPool.d8:
+        return meteoraDamm.instructions.initializeCustomizablePermissionlessConstantProductPool.decode(
+          instruction,
+        );
+      default:
+        throw new Error(`Unknown initialize instruction: ${instruction.d8}`);
     }
+  }
+
+  handleSwap(instruction: Instruction, block: Block, offset: Offset): SwapLiquidityEvent {
+    const {
+      accounts: { aTokenVault, bTokenVault, pool },
+    } = meteoraDamm.instructions.swap.decode(instruction);
+
+    const transfers = this.getTransfers(instruction);
+    const tokenATransferIn = transfers.find((t) => t.accounts.source === aTokenVault);
+    const tokenBTransferIn = transfers.find((t) => t.accounts.source === bTokenVault);
+    const tokenATransferOut = transfers.find((t) => t.accounts.destination === aTokenVault);
+    const tokenBTransferOut = transfers.find((t) => t.accounts.destination === bTokenVault);
+
+    const tx = instruction.getTransaction();
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === aTokenVault);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === bTokenVault);
 
     return {
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
-      eventType: 'remove',
-      lpMint,
-      tokenAAmount: -(tokenAAmount || 0n),
-      tokenBAmount: -(tokenBAmount || 0n),
+      eventType: 'swap',
+      tokenAMint: tokenABalance?.preMint ?? '',
+      tokenBMint: tokenABalance?.preMint ?? '',
+      tokenAAmount: tokenATransferIn
+        ? tokenATransferIn.data.amount
+        : (tokenATransferOut?.data.amount ?? 0n) * -1n,
+      tokenBAmount: tokenBTransferIn
+        ? tokenBTransferIn.data.amount
+        : (tokenBTransferOut?.data.amount ?? 0n) * -1n,
+      tokenABalance: tokenABalance?.postAmount ?? 0n,
+      tokenBBalance: tokenBBalance?.postAmount ?? 0n,
+      tokenADecimals: tokenABalance?.postDecimals ?? 0,
+      tokenBDecimals: tokenBBalance?.postDecimals ?? 0,
+      tokenAVault: aTokenVault,
+      tokenBVault: bTokenVault,
       blockNumber: block.header.number,
       timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
-      sender: user,
       offset,
-      tokenA: tokens?.tokenA || '',
-      tokenB: tokens?.tokenB || '',
     };
   }
 
@@ -206,81 +246,42 @@ export class MeteoraAmmHandler extends BaseHandler {
     block: Block,
     offset: Offset,
   ): InitializeLiquidity {
-    const descriptor = getInstructionDescriptor(instruction);
-    
-    // Common structure for both permissioned and permissionless pools
-    let lpMint: string;
-    let tokenAMint: string;
-    let tokenBMint: string;
-    let tokenAReservesAccount: string;
-    let tokenBReservesAccount: string;
-    let tokenAAmount = 0n;
-    let tokenBAmount = 0n;
+    const {
+      accounts: { pool, lpMint, tokenAMint, tokenBMint, ...accounts },
+    } = this.getInitialize(instruction);
 
-    // Permissioned pools doesn't initialize the reserves
-    if (descriptor === meteoraDamm.instructions.initializePermissionedPool.d8) {
-      ({
-        accounts: {
-          lpMint,
-          tokenAMint,
-          tokenBMint,
-          aVault: tokenAReservesAccount,
-          bVault: tokenBReservesAccount,
-        },
-      } = meteoraDamm.instructions.initializePermissionedPool.decode(instruction));
-    } else if(descriptor === meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.d8) {
-        ({
-            accounts: {
-            lpMint,
-            tokenAMint,
-            tokenBMint,
-            aVault: tokenAReservesAccount,
-            bVault: tokenBReservesAccount,
-            },
-            data: { tokenAAmount, tokenBAmount },
-        } = meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig.decode(instruction));
-    } else if(descriptor === meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.d8) {
-        ({
-            accounts: {
-            lpMint,
-            tokenAMint,
-            tokenBMint,
-            aVault: tokenAReservesAccount,
-            bVault: tokenBReservesAccount,
-            },
-            data: { tokenAAmount, tokenBAmount },
-        } = meteoraDamm.instructions.initializePermissionlessConstantProductPoolWithConfig2.decode(instruction));
-    } else {
-      ({
-        accounts: {
-          lpMint,
-          tokenAMint,
-          tokenBMint,
-          aVault: tokenAReservesAccount,
-          bVault: tokenBReservesAccount,
-        },
-        data: { tokenAAmount, tokenBAmount },
-      } = meteoraDamm.instructions.initializePermissionlessPoolWithFeeTier.decode(instruction));
-    }
+    const aTokenVault = 'aTokenVault' in accounts ? accounts.aTokenVault : undefined;
+    const bTokenVault = 'bTokenVault' in accounts ? accounts.bTokenVault : undefined;
 
     const createAccountInstruction = getNextInstruction(instruction, block.instructions);
     const {
       accounts: { fundingAccount: sender },
     } = systemProgram.instructions.createAccount.decode(createAccountInstruction);
 
+    const transfers = this.getTransfers(instruction);
+    const tokenATransfer = transfers.find((t) => t.accounts.destination === aTokenVault);
+    const tokenBTransfer = transfers.find((t) => t.accounts.destination === bTokenVault);
+
+    const tx = instruction.getTransaction();
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === aTokenVault);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === bTokenVault);
+
     return {
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'initialize',
-      lpMint,
-      tokenA: tokenAMint,
-      tokenB: tokenBMint,
-      tokenAReservesAccount,
-      tokenBReservesAccount,
-      tokenAAmount,
-      tokenBAmount,
+      tokenAMint: tokenAMint,
+      tokenBMint: tokenBMint,
+      tokenAVault: aTokenVault ?? '',
+      tokenBVault: bTokenVault ?? '',
+      tokenAAmount: tokenATransfer?.data.amount ?? 0n,
+      tokenBAmount: tokenBTransfer?.data.amount ?? 0n,
+      tokenABalance: tokenABalance?.postAmount ?? 0n,
+      tokenBBalance: tokenBBalance?.postAmount ?? 0n,
+      tokenADecimals: tokenABalance?.postDecimals ?? 0,
+      tokenBDecimals: tokenBBalance?.postDecimals ?? 0,
       blockNumber: block.header.number,
-      initTimestamp: BigInt(block.header.timestamp),
       timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,

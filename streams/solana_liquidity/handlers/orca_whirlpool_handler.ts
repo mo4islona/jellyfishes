@@ -1,5 +1,5 @@
 import { BaseHandler } from './base_handler';
-import * as raydium_amm from '../../solana_swaps/abi/raydium_amm';
+import * as whirlpool from '../../solana_swaps/abi/orca_whirlpool';
 import * as tokenProgram from '../../solana_swaps/abi/tokenProgram';
 import {
   Block,
@@ -16,9 +16,9 @@ import {
 } from './base_handler';
 import { Offset } from 'core/abstract_stream';
 
-export class RaydiumAmmHandler extends BaseHandler {
+export class OrcaWhirlpoolHandler extends BaseHandler {
   constructor() {
-    super('raydium', 'amm');
+    super('orca', 'clmm');
   }
 
   handleInstruction(
@@ -26,19 +26,18 @@ export class RaydiumAmmHandler extends BaseHandler {
     block: Block,
     offset: Offset,
   ): AddLiquidity | RemoveLiquidity | InitializeLiquidity | SwapLiquidityEvent {
-    const descriptor = getInstructionD1(instruction);
-    switch (descriptor) {
-      case raydium_amm.instructions.deposit.d1:
+    switch (instruction.d8) {
+      case whirlpool.instructions.increaseLiquidity.d8:
         return this.handleAddLiquidity(instruction, block, offset);
-      case raydium_amm.instructions.withdraw.d1:
+      case whirlpool.instructions.decreaseLiquidity.d8:
         return this.handleRemoveLiquidity(instruction, block, offset);
-      case raydium_amm.instructions.initialize2.d1:
+      case whirlpool.instructions.initializePool.d8:
+      case whirlpool.instructions.initializePoolV2.d8:
         return this.handleInitializePool(instruction, block, offset);
-      case raydium_amm.instructions.swapBaseIn.d1:
-      case raydium_amm.instructions.swapBaseOut.d1:
+      case whirlpool.instructions.swap.d8:
         return this.handleSwap(instruction, block, offset);
       default:
-        throw new Error(`Unknown instruction: ${descriptor}`);
+        throw new Error(`Unknown instruction: ${instruction.d8}`);
     }
   }
 
@@ -68,21 +67,22 @@ export class RaydiumAmmHandler extends BaseHandler {
   }
 
   handleAddLiquidity(instruction: Instruction, block: Block, offset: Offset): AddLiquidity {
-    const depositInstruction = raydium_amm.instructions.deposit.decode(instruction);
+    const increaseLiquidityInstruction =
+      whirlpool.instructions.increaseLiquidity.decode(instruction);
     const {
-      accounts: { poolCoinTokenAccount, amm, poolPcTokenAccount },
-    } = depositInstruction;
+      accounts: { whirlpool: pool, tokenVaultA, tokenVaultB },
+    } = increaseLiquidityInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.destination === poolCoinTokenAccount);
-    const tokenBTransfer = transfers.find((t) => t.accounts.destination === poolPcTokenAccount);
+    const tokenATransfer = transfers.find((t) => t.accounts.destination === tokenVaultA);
+    const tokenBTransfer = transfers.find((t) => t.accounts.destination === tokenVaultB);
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === poolCoinTokenAccount);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === poolPcTokenAccount);
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
 
     return {
-      pool: amm,
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'add',
@@ -90,13 +90,13 @@ export class RaydiumAmmHandler extends BaseHandler {
       tokenBAmount: tokenBTransfer?.data.amount ?? 0n,
       tokenAMint: tokenABalance?.preMint ?? '',
       tokenBMint: tokenBBalance?.preMint ?? '',
-      blockNumber: block.header.number,
       tokenABalance: tokenABalance?.postAmount ?? 0n,
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
       tokenBDecimals: tokenBBalance?.preDecimals ?? 0,
-      tokenAVault: poolCoinTokenAccount,
-      tokenBVault: poolPcTokenAccount,
+      tokenAVault: tokenVaultA,
+      tokenBVault: tokenVaultB,
+      blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
@@ -107,21 +107,22 @@ export class RaydiumAmmHandler extends BaseHandler {
   }
 
   handleRemoveLiquidity(instruction: Instruction, block: Block, offset: Offset): RemoveLiquidity {
-    const withdrawInstruction = raydium_amm.instructions.withdraw.decode(instruction);
+    const decreaseLiquidityInstruction =
+      whirlpool.instructions.decreaseLiquidity.decode(instruction);
     const {
-      accounts: { poolCoinTokenAccount, amm, poolPcTokenAccount },
-    } = withdrawInstruction;
+      accounts: { whirlpool: pool, tokenVaultA, tokenVaultB },
+    } = decreaseLiquidityInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.source === poolCoinTokenAccount);
-    const tokenBTransfer = transfers.find((t) => t.accounts.source === poolPcTokenAccount);
+    const tokenATransfer = transfers.find((t) => t.accounts.source === tokenVaultA);
+    const tokenBTransfer = transfers.find((t) => t.accounts.source === tokenVaultB);
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === poolCoinTokenAccount);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === poolPcTokenAccount);
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
 
     return {
-      pool: amm,
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'remove',
@@ -133,8 +134,8 @@ export class RaydiumAmmHandler extends BaseHandler {
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
       tokenBDecimals: tokenBBalance?.preDecimals ?? 0,
-      tokenAVault: poolCoinTokenAccount,
-      tokenBVault: poolPcTokenAccount,
+      tokenAVault: tokenVaultA,
+      tokenBVault: tokenVaultB,
       blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
@@ -150,75 +151,64 @@ export class RaydiumAmmHandler extends BaseHandler {
     block: Block,
     offset: Offset,
   ): InitializeLiquidity {
-    const initialize2Instruction = raydium_amm.instructions.initialize2.decode(instruction);
-
+    const initializePoolInstruction =
+      instruction.d8 === whirlpool.instructions.initializePool.d8
+        ? whirlpool.instructions.initializePool.decode(instruction)
+        : whirlpool.instructions.initializePoolV2.decode(instruction);
     const {
-      accounts: { poolCoinTokenAccount, poolPcTokenAccount, amm },
-    } = initialize2Instruction;
+      accounts: { whirlpool: pool, tokenVaultA, tokenVaultB, tokenMintA, tokenMintB },
+    } = initializePoolInstruction;
 
     const transfers = this.getTransfers(instruction);
-    const tokenATransfer = transfers.find((t) => t.accounts.destination === poolCoinTokenAccount);
-    const tokenBTransfer = transfers.find((t) => t.accounts.destination === poolPcTokenAccount);
+    const tokenATransfer = transfers.find((t) => t.accounts.destination === tokenVaultA);
+    const tokenBTransfer = transfers.find((t) => t.accounts.destination === tokenVaultB);
 
     const tx = instruction.getTransaction();
-    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === poolCoinTokenAccount);
-    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === poolPcTokenAccount);
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
 
     return {
-      pool: amm,
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'initialize',
+      tokenAMint: tokenMintA,
+      tokenBMint: tokenMintB,
       tokenAAmount: tokenATransfer?.data.amount ?? 0n,
       tokenBAmount: tokenBTransfer?.data.amount ?? 0n,
-      tokenAMint: tokenABalance?.postMint ?? '',
-      tokenBMint: tokenBBalance?.postMint ?? '',
       tokenABalance: tokenABalance?.postAmount ?? 0n,
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.postDecimals ?? 0,
       tokenBDecimals: tokenBBalance?.postDecimals ?? 0,
-      tokenAVault: poolCoinTokenAccount,
-      tokenBVault: poolPcTokenAccount,
+      tokenAVault: tokenVaultA,
+      tokenBVault: tokenVaultB,
       blockNumber: block.header.number,
-      timestamp: new Date(block.header.timestamp * 1000),
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
-      sender: this.getSender(instruction, block),
+      timestamp: new Date(block.header.timestamp * 1000),
       offset,
     };
   }
 
   private handleSwap(instruction: Instruction, block: Block, offset: Offset): SwapLiquidityEvent {
-    const swapInstruction =
-      instruction.d1 === raydium_amm.instructions.swapBaseIn.d1
-        ? raydium_amm.instructions.swapBaseIn.decode(instruction)
-        : raydium_amm.instructions.swapBaseOut.decode(instruction);
-
-    let {
-      accounts: { poolCoinTokenAccount, poolPcTokenAccount, amm, ammTargetOrders },
+    const swapInstruction = whirlpool.instructions.swap.decode(instruction);
+    const {
+      accounts: { whirlpool: pool, tokenVaultA, tokenVaultB },
     } = swapInstruction;
 
-    const tx = instruction.getTransaction();
-    let tokenABalance = tx.tokenBalances.find((tb) => tb.account === poolCoinTokenAccount);
-    let tokenBBalance = tx.tokenBalances.find((tb) => tb.account === poolPcTokenAccount);
-
-    // sometimes account layout doesn't match the expected layout and we need to offset the accounts
-    if (!tokenBBalance) {
-      poolPcTokenAccount = poolCoinTokenAccount;
-      poolCoinTokenAccount = ammTargetOrders;
-      tokenABalance = tx.tokenBalances.find((tb) => tb.account === poolCoinTokenAccount);
-      tokenBBalance = tx.tokenBalances.find((tb) => tb.account === poolPcTokenAccount);
-    }
-
     const transfers = this.getTransfers(instruction);
-    const tokenATransferIn = transfers.find((t) => t.accounts.destination === poolCoinTokenAccount);
-    const tokenBTransferIn = transfers.find((t) => t.accounts.destination === poolPcTokenAccount);
-    const tokenATransferOut = transfers.find((t) => t.accounts.source === poolCoinTokenAccount);
-    const tokenBTransferOut = transfers.find((t) => t.accounts.source === poolPcTokenAccount);
+    const tokenATransferIn = transfers.find((t) => t.accounts.destination === tokenVaultA);
+    const tokenBTransferIn = transfers.find((t) => t.accounts.destination === tokenVaultB);
+    const tokenATransferOut = transfers.find((t) => t.accounts.source === tokenVaultA);
+    const tokenBTransferOut = transfers.find((t) => t.accounts.source === tokenVaultB);
+
+    const tx = instruction.getTransaction();
+    const tokenABalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultA);
+    const tokenBBalance = tx.tokenBalances.find((tb) => tb.account === tokenVaultB);
 
     return {
-      pool: amm,
+      pool,
       protocol: this.protocol,
       poolType: this.poolType,
       eventType: 'swap',
@@ -234,13 +224,12 @@ export class RaydiumAmmHandler extends BaseHandler {
       tokenBBalance: tokenBBalance?.postAmount ?? 0n,
       tokenADecimals: tokenABalance?.preDecimals ?? 0,
       tokenBDecimals: tokenBBalance?.preDecimals ?? 0,
-      tokenAVault: poolCoinTokenAccount,
-      tokenBVault: poolPcTokenAccount,
+      tokenAVault: tokenVaultA,
+      tokenBVault: tokenVaultB,
       blockNumber: block.header.number,
       transactionHash: getTransactionHash(instruction, block),
       transactionIndex: instruction.transactionIndex || 0,
       instruction: instruction.instructionAddress,
-      sender: this.getSender(instruction, block),
       timestamp: new Date(block.header.timestamp * 1000),
       offset,
     };
