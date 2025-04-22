@@ -7,7 +7,8 @@
     "outDir": "dist",
     "importHelpers": true,
     "types": [
-      "vitest/globals"
+      "vitest/globals",
+      "node",
     ],
     "strict": true,
     "allowJs": true,
