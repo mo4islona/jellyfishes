@@ -382,12 +382,16 @@ AS
 		SELECT timestamp, sum(usdc_amount) / sum(eth_amount) as price_eth_usdc
 		FROM evm_eth_amounts GROUP BY timestamp
 	)
-	SELECT esr.timestamp,
+	SELECT esr.timestamp AS timestamp,
 		esr.network AS network,
 		dex_name,
 		token_a,
-        price_token_eth*price_eth_usd AS price_token_a_usd,
-        evm_prices_token_eth.price_token_eth AS price_token_a_eth,    
+        price_token_a_eth*price_eth_usd AS price_token_a_usd,
+        -- here is the trick. We take MAX over two prices - calculated via token_a-WETH swap (price_eth_a join)
+        -- and token_b-WETH swap (price_eth_b join). In the latter case, we calculate price_token_a_eth as
+        -- price_token_a_eth = price_token_a_b*price_token_b_eth. In case there is no swap with WETH price value is zero
+        -- that's why we take greatest one.
+        GREATEST(price_eth_a.price_token_eth, ABS(esr.amount_b / esr.amount_a)*price_eth_b.price_token_eth) AS price_token_a_eth,    
         pem.price_eth_usdc AS price_eth_usd,
 	    '!(weth|usdc)-!(weth|usdc)' AS swap_type,
 	    token_b, amount_a_raw, amount_b_raw, amount_a, amount_b,  account,
@@ -395,9 +399,12 @@ AS
 	    esr.sign AS sign
 	FROM evm_swaps_raw_dupl esr
 	 	-- looking back for first swap of esr.token_a to ETH
-		ASOF LEFT JOIN evm_prices_token_eth ON
-			evm_prices_token_eth.timestamp < esr.timestamp
-			AND evm_prices_token_eth.token_address = esr.token_a 
+		ASOF LEFT JOIN evm_prices_token_eth price_eth_a ON
+			price_eth_a.timestamp < esr.timestamp
+			AND price_eth_a.token_address = esr.token_a 
+		ASOF LEFT JOIN evm_prices_token_eth price_eth_b ON
+			price_eth_b.timestamp < esr.timestamp
+			AND price_eth_b.token_address = esr.token_b
 		LEFT JOIN prices_eth_usdc_every_minute pem ON pem.timestamp = toStartOfMinute(esr.`timestamp`)
 	WHERE -- NOT WETH AND USDC
 	(	token_a NOT IN ('0x4200000000000000000000000000000000000006', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
@@ -408,7 +415,6 @@ AS
 		AND token_b NOT IN ('0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 	)
 ;
-
 
 
 
