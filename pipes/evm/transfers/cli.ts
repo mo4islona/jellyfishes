@@ -14,12 +14,12 @@ async function main() {
   const ds = new EvmTransfersStream({
     portal: config.portal.url,
     blockRange: {
-      from: 0,
+      from: config.blockFrom,
     },
     logger,
     state: new ClickhouseState(clickhouse, {
       table: 'evm_sync_status',
-      id: `erc20-transfers-${config.network}-v2`,
+      id: `erc20-transfers-${config.network}-v3`,
       onStateRollback: async (state, current) => {
         /**
          * Clean all data before the current offset.
