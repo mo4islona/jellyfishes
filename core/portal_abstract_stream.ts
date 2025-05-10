@@ -4,12 +4,12 @@ import {
   PortalQuery,
   PortalResponse,
   PortalStreamData,
-} from '@subsquid/portal-client';
-import { Throttler } from '@subsquid/util-internal';
-import { Logger as PinoLogger, pino } from 'pino';
-import { formatNumber } from '../pipes/utils';
-import { State } from './state';
-import { TrackProgress } from './track_progress';
+} from "@subsquid/portal-client";
+import { Throttler } from "@subsquid/util-internal";
+import { Logger as PinoLogger, pino } from "pino";
+import { formatNumber } from "../pipes/utils";
+import { State } from "./state";
+import { TrackProgress } from "./track_progress";
 
 export type Logger = PinoLogger;
 
@@ -68,16 +68,16 @@ export type Offset = {
 export type OptionalArgs<T> = T | undefined;
 
 function parseBlockNumber(block: number | string) {
-  if (typeof block === 'string') {
+  if (typeof block === "string") {
     /**
      * Remove commas and underscores
      * 1_000_000 -> 1000000
      * 1,000,000 -> 1000000
      */
-    const value = Number(block.replace(/[_,]/g, ''));
+    const value = Number(block.replace(/[_,]/g, ""));
     if (isNaN(value)) {
       throw new Error(
-        `Can't parse a block number from string "${block}". Valid examples: "1000000", "1_000_000", "1,000,000"`,
+        `Can't parse a block number from string "${block}". Valid examples: "1000000", "1_000_000", "1,000,000"`
       );
     }
 
@@ -89,7 +89,7 @@ function parseBlockNumber(block: number | string) {
 
 export abstract class PortalAbstractStream<
   Res extends {},
-  Args extends object | undefined = undefined,
+  Args extends object | undefined = undefined
 > {
   logger: Logger;
   progress?: TrackProgress;
@@ -110,10 +110,14 @@ export abstract class PortalAbstractStream<
   constructor(protected readonly options: StreamOptions<Args>) {
     this.logger =
       options.logger ||
-      pino({ base: null, messageKey: 'message', level: process.env.LOG_LEVEL || 'info' });
+      pino({
+        base: null,
+        messageKey: "message",
+        level: process.env.LOG_LEVEL || "info",
+      });
 
     this.portal = new PortalClient(
-      typeof options.portal === 'string'
+      typeof options.portal === "string"
         ? {
             url: options.portal,
             http: {
@@ -126,7 +130,7 @@ export abstract class PortalAbstractStream<
               retryAttempts: 10,
               ...options.portal.http,
             },
-          },
+          }
     );
 
     // Throttle the head call
@@ -168,19 +172,26 @@ export abstract class PortalAbstractStream<
             return;
           }
 
-          const producedAt = new Date(current.timestamp * 1000).toLocaleString('en-GB', {
-            dateStyle: 'medium',
-            timeStyle: 'long',
-          });
+          const producedAt = new Date(current.timestamp * 1000).toLocaleString(
+            "en-GB",
+            {
+              dateStyle: "medium",
+              timeStyle: "long",
+            }
+          );
           this.logger.info(
-            `Resuming from ${formatNumber(current.number)} block produced at ${producedAt}`,
+            `Resuming from ${formatNumber(
+              current.number
+            )} block produced at ${producedAt}`
           );
         }),
       onProgress:
         options.onProgress ||
         (({ state, interval }) => {
           this.logger.info({
-            message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%)`,
+            message: `${formatNumber(state.current)} / ${formatNumber(
+              state.last
+            )} (${formatNumber(state.percent)}%)`,
             speed: `${interval.processedPerSecond} blocks/second`,
           });
         }),
@@ -216,9 +227,9 @@ export abstract class PortalAbstractStream<
     Res extends PortalResponse & {
       header: { number: number; timestamp: number };
     },
-    Query extends Omit<PortalQuery, 'fromBlock' | 'toBlock'> & {
+    Query extends Omit<PortalQuery, "fromBlock" | "toBlock"> & {
       fields: { block: { number: boolean; timestamp: boolean } };
-    },
+    }
   >(req: Query): Promise<ReadableStream<PortalStreamData<Res>>> {
     // Get the last offset from the state
     const { current, initial, resume } = await this.getState({
@@ -259,7 +270,7 @@ export abstract class PortalAbstractStream<
         toBlock: this.toBlock,
         parentBlockHash: current.parentBlockHash,
       },
-      {},
+      {}
     );
 
     return source.pipeThrough(
@@ -271,13 +282,17 @@ export abstract class PortalAbstractStream<
         transform: (data, controller) => {
           const lastBlock = data.blocks[data.blocks.length - 1];
 
-          this.offsets.push({
+          const offset = {
             number: lastBlock.header.number,
             parentBlockHash: data.finalizedHead?.hash,
             timestamp: lastBlock.header.timestamp,
-          });
+          };
 
-          const batch = `${formatNumber(data.blocks[0].header.number)} / ${formatNumber(lastBlock.header.number)}`;
+          this.offsets.push(offset);
+
+          const batch = `${formatNumber(
+            data.blocks[0].header.number
+          )} / ${formatNumber(lastBlock.header.number)}`;
 
           this.logger.debug(`Enqueuing chunks from ${batch}`);
           /**
@@ -287,13 +302,13 @@ export abstract class PortalAbstractStream<
            */
           if (this.options.state && this.offsets.length > 2) {
             throw new Error(
-              `Offset was not acknowledged properly. Please call "await ds.ack()" after processing the data`,
+              `Offset was not acknowledged properly. Please call "await ds.ack()" after processing the data`
             );
           }
 
           controller.enqueue(data);
         },
-      }),
+      })
     );
   }
 
@@ -307,10 +322,12 @@ export abstract class PortalAbstractStream<
    * @returns The current offset.
    */
   async getState(
-    defaultValue: Offset,
+    defaultValue: Offset
   ): Promise<{ current: Offset; initial: Offset; resume: boolean }> {
     // Fetch the last offset from the state
-    const state = this.options.state ? await this.options.state.getOffset(defaultValue) : null;
+    const state = this.options.state
+      ? await this.options.state.getOffset(defaultValue)
+      : null;
     if (!state) {
       return { current: defaultValue, initial: defaultValue, resume: false };
     }
@@ -338,10 +355,10 @@ export abstract class PortalAbstractStream<
     if (!this.options.state) {
       this.warnOnlyOnce(
         [
-          '====================================',
-          'State is not defined. Please set a state to make a stream resumable',
-          '====================================',
-        ].join('\n'),
+          "====================================",
+          "State is not defined. Please set a state to make a stream resumable",
+          "====================================",
+        ].join("\n")
       );
       return;
     }
