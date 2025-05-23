@@ -1,0 +1,108 @@
+-- Materialized view that generates 5-minute candlestick data for tokens + holders
+-- CREATE MATERIALIZED VIEW IF NOT EXISTS evm_token_candlesticks_5min_mv
+-- (
+--     timestamp DateTime CODEC (DoubleDelta, ZSTD),
+--     token                   String,
+--     network                 LowCardinality(String),    
+--     open_price_token_usd    Float64,
+--     high_price_token_usd    Float64,
+--     low_price_token_usd	    Float64,
+--     close_price_token_usd   Float64,
+--     volume_5min_usd	        Float64,
+--     volume_1hr_usd	        Float64,
+--     volume_6hr_usd	        Float64,
+--     volume_24hr_usd	        Float64,
+--     swap_count_5min         Float64,
+--     swap_count_1hr          Float64,
+--     swap_count_6hr          Float64,
+--     swap_count_24hr         Float64,
+--     holders                 UInt32
+-- ) ENGINE = ReplacingMergeTree()
+--     PARTITION BY toYYYYMM(timestamp)
+--     ORDER BY (timestamp, token, network)
+--     TTL timestamp + INTERVAL 360 DAY
+--     POPULATE
+-- AS
+--     SELECT
+--         toStartOfFiveMinutes(timestamp) AS timestamp
+--         , pp.token
+--         , pp.network
+-- 	    , argMin(price_token_usd, pp.timestamp) AS open_price_token_usd
+-- 	    , max(price_token_usd) AS high_price_token_usd
+-- 	    , min(price_token_usd) AS low_price_token_usd
+-- 	    , argMax(price_token_usd, pp.timestamp) AS close_price_token_usd
+-- 		, argMax(pp.volume_5min, pp.timestamp) AS volume_5min_usd
+-- 		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
+-- 		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
+-- 		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+-- 		, argMax(pp.swap_count_5min, pp.timestamp) AS swap_count_5min
+-- 		, argMax(pp.swap_count_1hr, pp.timestamp) AS swap_count_1hr
+-- 		, argMax(pp.swap_count_6hr, pp.timestamp) AS swap_count_6hr
+-- 		, argMax(pp.swap_count_24hr, pp.timestamp) AS swap_count_24hr
+-- 		, argMax(hh.holders, hh.timestamp) AS holders
+--     FROM evm_swap_parts_with_prices_vols_mv pp
+-- 		/*
+-- 		 * Here goes the trick from https://stackoverflow.com/questions/75243697/joining-large-tables-in-clickhouse-out-of-memory-or-slow
+-- 		 * Naive join with evm_erc20_holders does not work since this table is huge and request runs out of memory.
+-- 		 * We just join with (thus load into memory) small portion of evm_erc20_holders, only for the data being inserted into
+-- 		 * evm_swap_parts_with_prices_vols_mv (not all rows).
+-- 		 */
+-- 		ASOF LEFT JOIN (
+-- 			SELECT * FROM evm_erc20_holders
+-- 			WHERE
+-- 				timestamp <= (SELECT MAX(timestamp) FROM evm_swap_parts_with_prices_vols_mv)
+-- 				-- subtract 5 minutes from min timestamp since holders are given in 5 minute intervals.
+-- 				AND timestamp >= (SELECT subtractMinutes(MIN(timestamp), 5) FROM evm_swap_parts_with_prices_vols_mv)
+-- 				AND (network, token) IN (SELECT network, token FROM evm_swap_parts_with_prices_vols_mv)
+-- 			) hh ON
+-- 			hh.timestamp <= pp.timestamp AND 
+-- 			hh.network = pp.network AND hh.token = pp.token
+--     WHERE 
+--     	price_token_usd < 500 AND price_token_usd != 0
+--     	AND token IN (SELECT token FROM evm_erc20_first_mints)
+-- 	GROUP BY timestamp, token, network
+-- 	ORDER BY timestamp, token, network;
+
+
+-- /* 
+--  * Token price, volumes and holders - every minute.
+--  * Holders sometimes can be zero since holders are collected every 5 minutes, while prices are every minute.
+--  */
+-- CREATE MATERIALIZED VIEW IF NOT EXISTS evm_prices_vols_holders_mv
+-- ENGINE = ReplacingMergeTree()
+-- ORDER BY (timestamp, token, network)
+-- POPULATE
+-- AS
+-- 	SELECT toStartOfMinute(pp.timestamp) AS timestamp
+-- 		, pp.token AS token
+-- 		, pp.network AS network
+-- 		, argMax(pp.price_token_usd, pp.timestamp) AS price_token_usd
+-- 		, argMax(pp.volume_5min, pp.timestamp) AS volume_5min_usd
+-- 		, argMax(pp.volume_1hr, pp.timestamp) AS volume_1hr_usd
+-- 		, argMax(pp.volume_6hr, pp.timestamp) AS volume_6hr_usd
+-- 		, argMax(pp.volume_24hr, pp.timestamp) AS volume_24hr_usd
+-- 		, argMax(pp.swap_count_5min, pp.timestamp) AS swap_count_5min
+-- 		, argMax(pp.swap_count_1hr, pp.timestamp) AS swap_count_1hr
+-- 		, argMax(pp.swap_count_6hr, pp.timestamp) AS swap_count_6hr
+-- 		, argMax(pp.swap_count_24hr, pp.timestamp) AS swap_count_24hr
+-- 		, argMax(hh.holders, hh.timestamp) AS holders
+-- 	FROM evm_swap_parts_with_prices_vols_mv pp
+-- 		/*
+-- 		 * Here goes the trick from https://stackoverflow.com/questions/75243697/joining-large-tables-in-clickhouse-out-of-memory-or-slow
+-- 		 * Naive join with evm_erc20_holders does not work since this table is huge and request runs out of memory.
+-- 		 * We just join with (thus load into memory) small portion of evm_erc20_holders, only for the data being inserted into
+-- 		 * evm_swap_parts_with_prices_vols_mv (not all rows).
+-- 		 */
+-- 		ASOF LEFT JOIN (
+-- 			SELECT * FROM evm_erc20_holders
+-- 			WHERE
+-- 				timestamp <= (SELECT MAX(timestamp) FROM evm_swap_parts_with_prices_vols_mv)
+-- 				-- subtract 5 minutes from min timestamp since holders are given in 5 minute intervals.
+-- 				AND timestamp >= (SELECT subtractMinutes(MIN(timestamp), 5) FROM evm_swap_parts_with_prices_vols_mv)
+-- 				AND (network, token) IN (SELECT network, token FROM evm_swap_parts_with_prices_vols_mv)
+-- 			) hh ON
+-- 			hh.timestamp <= pp.timestamp AND hh.network = pp.network AND hh.token = pp.token
+-- 	WHERE
+-- 		token IN (SELECT token FROM evm_erc20_first_mints)
+-- 	GROUP BY timestamp, token, network
+-- 	ORDER BY timestamp, token, network;

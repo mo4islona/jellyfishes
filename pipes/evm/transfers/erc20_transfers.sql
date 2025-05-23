@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_transfers
     token             String,
     "from"            String,
     "to"              String,
-    amount            UInt64,
+    amount            Int256,
     block_number      UInt32 CODEC (DoubleDelta, ZSTD),
     transaction_index UInt16,
     log_index         UInt16,
@@ -15,6 +15,19 @@ CREATE TABLE IF NOT EXISTS evm_erc20_transfers
       PARTITION BY toYYYYMM(timestamp) -- DATA WILL BE SPLIT BY MONTH
       ORDER BY (timestamp, transaction_index, log_index)
       TTL timestamp + INTERVAL 90 DAY;
+
+CREATE TABLE IF NOT EXISTS evm_erc20_holders
+(
+    timestamp         DateTime CODEC (DoubleDelta, ZSTD),
+    network           LowCardinality(String),
+    token             String,
+    holders			UInt32,
+    sign			Int8
+) ENGINE = CollapsingMergeTree(sign)
+      PARTITION BY toYYYYMM(timestamp)
+      ORDER BY (timestamp, network, token)
+      TTL timestamp + INTERVAL 90 DAY;
+
 
 -- ############################################################################################################
 --
@@ -28,7 +41,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_monthly_transfers
     account   String,
     token     String,
     count     UInt64,
-    amount    Int128
+    amount    Int256
 ) ENGINE = SummingMergeTree() ORDER BY (timestamp, token, account);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS evm_erc20_monthly_transfers_mva TO evm_erc20_monthly_transfers AS
@@ -57,7 +70,7 @@ CREATE TABLE IF NOT EXISTS evm_erc20_5m_transfers
     account   String,
     token     String,
     count     UInt32,
-    amount    Int128
+    amount    Int256
 ) ENGINE = SummingMergeTree()
     ORDER BY (timestamp, token, account)
     TTL timestamp + INTERVAL 60 DAY;
@@ -79,3 +92,13 @@ SELECT toStartOfFiveMinutes(timestamp) as timestamp,
        sum(sign)                       as count
 FROM evm_erc20_transfers
 GROUP BY timestamp, token, "to";
+
+CREATE TABLE IF NOT EXISTS evm_erc20_first_mints
+(
+    timestamp DateTime CODEC (DoubleDelta, ZSTD),
+    `network` LowCardinality(String),
+    `token` String,
+    `transactionHash` String
+)
+ENGINE = ReplacingMergeTree()
+ORDER BY (token, network);

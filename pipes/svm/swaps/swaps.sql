@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS solana_swaps_raw
     timestamp           DateTime CODEC (DoubleDelta, ZSTD),
     dex                 LowCardinality(String),
     token_a             String,
-    token_b             String,
+    token_b             String,   -- SOL, USDC, USDT
     amount_a            Float64,
     amount_b            Float64,
     token_a_usdc_price  Float64,

@@ -31,7 +31,7 @@ const logger = createLogger('evm dex swaps').child({ network: config.network });
 logger.info(`Local database: ${config.dbPath}`);
 
 async function main() {
-  await ensureTables(clickhouse, path.join(__dirname, 'swaps.sql'));
+  await ensureTables(clickhouse, __dirname);
 
   const ds = new EvmSwapStream({
     portal: config.portal.url,
