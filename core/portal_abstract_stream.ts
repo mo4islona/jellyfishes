@@ -285,11 +285,11 @@ export abstract class PortalAbstractStream<
            * We can have only 2 unacknowledged chunks — one is already processing on the client-side,
            * and another is waiting to be processed in memory
            */
-          if (this.options.state && this.offsets.length > 2) {
-            throw new Error(
-              `Offset was not acknowledged properly. Please call "await ds.ack()" after processing the data`,
-            );
-          }
+          // if (this.options.state && this.offsets.length > 2) {
+          //   throw new Error(
+          //     `Offset was not acknowledged properly. Please call "await ds.ack()" after processing the data`,
+          //   );
+          // }
 
           controller.enqueue(data);
         },
