@@ -5,9 +5,9 @@ async function main() {
   const logger = createLogger('solana_tokens');
 
   const datasource = new SolanaPumpfunTokensStream({
-    portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
+    portal: 'https://portal.sqd.dev/datasets/solana-beta',
     blockRange: {
-      from: 240_000_000,
+      from: 338227791
     },
     logger,
   });
@@ -19,7 +19,6 @@ async function main() {
       t.accounts.mint;
     });
     logger.info(`--------------`);
-
     // await datasource.ack();
   }
 }
